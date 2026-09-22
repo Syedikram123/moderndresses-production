@@ -26,14 +26,14 @@ export const AdminLogin: React.FC = () => {
     setLoading(true);
 
     try {
-      const success = await login(password);
-      if (success) {
+      const res = await login(password);
+      if (res.success) {
         navigate('/admin');
       } else {
-        setError('Incorrect password. Please check and try again.');
+        setError(res.error || 'Incorrect password. Please check and try again.');
       }
-    } catch (err) {
-      setError('An error occurred while authenticating.');
+    } catch (err: any) {
+      setError(err?.message || 'An error occurred while authenticating.');
     } finally {
       setLoading(false);
     }

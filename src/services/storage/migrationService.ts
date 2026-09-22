@@ -87,9 +87,9 @@ export async function runInitialMigrationIfEmpty(): Promise<MigrationResult> {
     const adminAuthSnap = await getDoc(adminAuthRef);
     if (!adminAuthSnap.exists()) {
       batch.set(adminAuthRef, {
-        passwordHash: '970aa567adf10f8fd13265f79bd2c1d8547ce388a89261aa853375bc63547754',
+        passwordHash: 'bb7affd4c4095e9c57a92caf64eb22941964e8fad4e75e4971cced38bde1684f', // moderndresses@admin2026
         salt: 'bc36ce213b2759abc69c738a68685705',
-        recoveryHash: 'c6ed0bda4c090bf9e735e55424a19d851ee72f1e882407e5025e1be8e5f29a65',
+        recoveryHash: 'ce145f0a6be0540ac9afb6e94a99aecdee7521c8c2659bfe15339bdb8f752da2', // moderndresses@recovery2026
         recoverySalt: 'c05603b589370c5eaa7fab644e08ded8',
         updatedAt: new Date().toISOString(),
       });

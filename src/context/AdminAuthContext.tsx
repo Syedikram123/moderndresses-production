@@ -18,7 +18,7 @@ import {
 
 interface AdminAuthContextType {
   isAuthenticated: boolean;
-  login: (password: string) => Promise<boolean>;
+  login: (password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   adminEmail: string | null;
   changePassword: (oldPass: string, newPass: string) => Promise<{ success: boolean; error?: string }>;
@@ -30,9 +30,14 @@ const AdminAuthContext = createContext<AdminAuthContextType | undefined>(undefin
 const AUTH_STORAGE_KEY = 'md_admin_auth_session';
 const ADMIN_INTERNAL_EMAIL = 'admin@moderndresses.com';
 
-// Pre-computed salted SHA-256 hashes for initial recovery setup (Zero plaintext in code)
+// Deterministic initial credentials
+// Initial Admin Password: moderndresses@admin2026
+const DEFAULT_INITIAL_SALT = 'bc36ce213b2759abc69c738a68685705';
+const DEFAULT_INITIAL_HASH = 'bb7affd4c4095e9c57a92caf64eb22941964e8fad4e75e4971cced38bde1684f';
+
+// Initial Recovery Password: moderndresses@recovery2026
 const DEFAULT_INITIAL_REC_SALT = 'c05603b589370c5eaa7fab644e08ded8';
-const DEFAULT_INITIAL_REC_HASH = 'c6ed0bda4c090bf9e735e55424a19d851ee72f1e882407e5025e1be8e5f29a65';
+const DEFAULT_INITIAL_REC_HASH = 'ce145f0a6be0540ac9afb6e94a99aecdee7521c8c2659bfe15339bdb8f752da2';
 
 export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -59,50 +64,109 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   /**
    * Password login:
-   * Authenticates against Firebase Auth to issue valid signed tokens (request.auth != null)
-   * while keeping the customer-facing admin UI strictly password-only.
+   * Authenticates against Firebase Auth using ADMIN_INTERNAL_EMAIL.
+   * If the admin user does not yet exist in Firebase Auth and the entered password
+   * matches the initial admin password (or configured hash), it automatically provisions
+   * the account in Firebase Auth.
    */
-  const login = async (password: string): Promise<boolean> => {
-    if (!password) return false;
+  const login = async (password: string): Promise<{ success: boolean; error?: string }> => {
+    if (!password) {
+      return { success: false, error: 'Please enter your admin password.' };
+    }
 
     if (isFirebaseConfigured && auth) {
       try {
-        // Attempt standard sign in
+        // 1. Attempt standard Firebase Auth sign in
         const cred = await signInWithEmailAndPassword(auth, ADMIN_INTERNAL_EMAIL, password);
         if (cred.user) {
           setIsAuthenticated(true);
           localStorage.setItem(AUTH_STORAGE_KEY, 'true');
-          return true;
+          return { success: true };
         }
       } catch (err: any) {
-        // If user does not exist yet in Firebase Auth on first startup, initialize account seamlessly
-        if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') {
-          try {
-            const newCred = await createUserWithEmailAndPassword(auth, ADMIN_INTERNAL_EMAIL, password);
-            if (newCred.user) {
-              setIsAuthenticated(true);
-              localStorage.setItem(AUTH_STORAGE_KEY, 'true');
-              return true;
-            }
-          } catch (createErr: any) {
-            // If already exists but wrong password, sign-in failure is valid
-            console.warn('Firebase Auth sign in failed:', createErr.message || err.message);
-            return false;
-          }
+        console.warn('Firebase Auth sign in attempt result:', err.code, err.message);
+
+        // A. Check if Email/Password provider is disabled in Firebase Console
+        if (err.code === 'auth/operation-not-allowed') {
+          return {
+            success: false,
+            error:
+              'Email/Password sign-in provider is disabled in Firebase Console. Please go to Firebase Console > Authentication > Sign-in method, click "Email/Password", and toggle "Enable".',
+          };
         }
-        console.warn('Firebase Auth sign in failed:', err.message);
-        return false;
+
+        // B. Handle uninitialized user / invalid credentials
+        if (
+          err.code === 'auth/user-not-found' ||
+          err.code === 'auth/invalid-credential' ||
+          err.code === 'auth/invalid-login-credentials'
+        ) {
+          // Verify if password matches the configured initial admin password
+          const isInitialValid = await verifyPassword(password, DEFAULT_INITIAL_SALT, DEFAULT_INITIAL_HASH);
+
+          if (isInitialValid) {
+            try {
+              // Automatically initialize and register the admin in Firebase Authentication
+              const newCred = await createUserWithEmailAndPassword(auth, ADMIN_INTERNAL_EMAIL, password);
+              if (newCred.user) {
+                setIsAuthenticated(true);
+                localStorage.setItem(AUTH_STORAGE_KEY, 'true');
+                return { success: true };
+              }
+            } catch (createErr: any) {
+              console.warn('Firebase Auth user creation error:', createErr.code, createErr.message);
+              if (createErr.code === 'auth/operation-not-allowed') {
+                return {
+                  success: false,
+                  error:
+                    'Email/Password sign-in provider is disabled in Firebase Console. Please go to Firebase Console > Authentication > Sign-in method, click "Email/Password", and toggle "Enable".',
+                };
+              }
+              if (createErr.code === 'auth/email-already-in-use') {
+                // User already created in Firebase with a different password
+                return {
+                  success: false,
+                  error: 'Incorrect admin password. If you updated your password, please enter your new password.',
+                };
+              }
+              return {
+                success: false,
+                error: createErr.message || 'Failed to initialize admin account in Firebase Authentication.',
+              };
+            }
+          }
+
+          return {
+            success: false,
+            error: 'Incorrect password. Please check and try again.',
+          };
+        }
+
+        // C. Rate-limiting
+        if (err.code === 'auth/too-many-requests') {
+          return {
+            success: false,
+            error:
+              'Account temporarily locked due to multiple failed attempts. Please wait a few minutes or reset your password using Forgot Password.',
+          };
+        }
+
+        return {
+          success: false,
+          error: err.message || 'Incorrect password. Please check and try again.',
+        };
       }
     }
 
-    // Fallback local check if offline
-    if (password) {
+    // Fallback if offline / local demo mode
+    const isInitialValid = await verifyPassword(password, DEFAULT_INITIAL_SALT, DEFAULT_INITIAL_HASH);
+    if (isInitialValid) {
       setIsAuthenticated(true);
       localStorage.setItem(AUTH_STORAGE_KEY, 'true');
-      return true;
+      return { success: true };
     }
 
-    return false;
+    return { success: false, error: 'Incorrect password.' };
   };
 
   const logout = async () => {
@@ -119,7 +183,7 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   /**
    * Change Password:
-   * Updates password directly in Firebase Authentication and re-hashes credentials
+   * Updates password directly in Firebase Authentication and stores salted hash in Firestore
    */
   const changePassword = async (
     oldPass: string,
@@ -183,35 +247,42 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
 
     try {
-      let storedRecHash = DEFAULT_INITIAL_REC_HASH;
-      let storedRecSalt = DEFAULT_INITIAL_REC_SALT;
-
-      if (isFirebaseConfigured && db) {
-        const snap = await getDoc(doc(db, 'settings', 'admin_auth'));
-        if (snap.exists()) {
-          const data = snap.data();
-          if (data.recoveryHash && data.recoverySalt) {
-            storedRecHash = data.recoveryHash;
-            storedRecSalt = data.recoverySalt;
-          }
-        }
-      }
-
-      const isValid = await verifyPassword(recoverySecret, storedRecSalt, storedRecHash);
+      const isValid = await verifyPassword(recoverySecret, DEFAULT_INITIAL_REC_SALT, DEFAULT_INITIAL_REC_HASH);
       if (!isValid) {
         return { success: false, error: 'Incorrect recovery password.' };
       }
 
-      // Recovery verified: update password
+      // Recovery verified: update password in Firebase Auth
       if (isFirebaseConfigured && auth) {
         if (auth.currentUser) {
           await updateFirebaseAuthPassword(auth.currentUser, newPass);
         } else {
-          // Sign in or create with new password
           try {
             await signInWithEmailAndPassword(auth, ADMIN_INTERNAL_EMAIL, newPass);
           } catch {
-            await createUserWithEmailAndPassword(auth, ADMIN_INTERNAL_EMAIL, newPass);
+            try {
+              await createUserWithEmailAndPassword(auth, ADMIN_INTERNAL_EMAIL, newPass);
+            } catch (createErr: any) {
+              if (createErr.code === 'auth/email-already-in-use') {
+                // If user exists, sign in with initial password to update
+                try {
+                  const initialCred = await signInWithEmailAndPassword(
+                    auth,
+                    ADMIN_INTERNAL_EMAIL,
+                    'moderndresses@admin2026'
+                  );
+                  if (initialCred.user) {
+                    await updateFirebaseAuthPassword(initialCred.user, newPass);
+                  }
+                } catch {
+                  return {
+                    success: false,
+                    error:
+                      'Recovery secret matched. Please update password in Firebase Console (Authentication > Users) or sign in with your current password.',
+                  };
+                }
+              }
+            }
           }
         }
       }
@@ -245,3 +316,4 @@ export const useAdminAuth = (): AdminAuthContextType => {
   }
   return context;
 };
+
