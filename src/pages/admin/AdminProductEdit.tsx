@@ -257,9 +257,9 @@ export const AdminProductEdit: React.FC = () => {
         return c;
       });
       setColours(updatedColours);
-    } catch (err) {
-      console.error(err);
-      alert('Failed to process and upload image.');
+    } catch (err: any) {
+      console.error('Image upload error in AdminProductEdit:', err);
+      alert(`Failed to process and upload image: ${err?.message || 'Unknown error'}`);
     }
   };
 

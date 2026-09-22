@@ -11,7 +11,6 @@ const supabaseUrl =
 const serviceRoleKey =
   process.env.SUPABASE_SERVICE_ROLE_KEY ||
   process.env.SUPABASE_SECRET_KEY ||
-  process.env.VITE_SUPABASE_ANON_KEY ||
   '';
 
 export default async function handler(req: any, res: any) {
@@ -28,24 +27,44 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ error: 'Method not allowed. Only POST is accepted.' });
   }
 
-  // Verify authentication header presence for admin operations
-  const authHeader = req.headers.authorization || '';
-  if (!authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Unauthorized. Admin authentication token required.' });
+  // Parse body if received as raw string
+  let payload = req.body;
+  if (typeof payload === 'string') {
+    try {
+      payload = JSON.parse(payload);
+    } catch {
+      return res.status(400).json({ error: 'Invalid JSON body payload.' });
+    }
   }
 
+  // Verify authentication header presence for admin operations
+  const authHeader = req.headers?.authorization || req.headers?.Authorization || '';
+  if (!authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({
+      error: 'Unauthorized. An active admin authentication session token is required to upload/delete media.',
+    });
+  }
+
+  // Verify server-side secret key configuration
   if (!serviceRoleKey) {
     return res.status(500).json({
-      error: 'Supabase service configuration missing on server. Set SUPABASE_SERVICE_ROLE_KEY in Vercel.',
+      error:
+        'Missing SUPABASE_SERVICE_ROLE_KEY in Vercel Environment Variables. Please copy the "service_role" secret key from Supabase Dashboard > Project Settings > API and add it as SUPABASE_SERVICE_ROLE_KEY in Vercel Project Settings > Environment Variables, then redeploy.',
     });
   }
 
   try {
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
-    const { action } = req.body || {};
+    const supabase = createClient(supabaseUrl, serviceRoleKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    });
+
+    const { action } = payload || {};
 
     if (action === 'upload') {
-      const { path, base64Data, contentType = 'image/webp' } = req.body;
+      const { path, base64Data, contentType = 'image/webp' } = payload;
       if (!path || !base64Data) {
         return res.status(400).json({ error: 'Missing path or base64Data for upload.' });
       }
@@ -63,7 +82,9 @@ export default async function handler(req: any, res: any) {
 
       if (error) {
         console.error('Server storage upload error:', error);
-        return res.status(500).json({ error: error.message });
+        return res.status(500).json({
+          error: `Supabase Storage upload error: ${error.message}. Ensure bucket "${BUCKET_NAME}" exists in Supabase.`,
+        });
       }
 
       const { data: publicUrlData } = supabase.storage
@@ -78,7 +99,7 @@ export default async function handler(req: any, res: any) {
     }
 
     if (action === 'delete') {
-      const { paths } = req.body;
+      const { paths } = payload;
       if (!Array.isArray(paths) || paths.length === 0) {
         return res.status(400).json({ error: 'Missing paths array for delete.' });
       }
@@ -93,7 +114,7 @@ export default async function handler(req: any, res: any) {
     }
 
     if (action === 'delete-folder') {
-      const { folderPrefix } = req.body;
+      const { folderPrefix } = payload;
       if (!folderPrefix) {
         return res.status(400).json({ error: 'Missing folderPrefix.' });
       }
@@ -130,3 +151,4 @@ export default async function handler(req: any, res: any) {
     return res.status(500).json({ error: err.message || 'Internal server error.' });
   }
 }
+

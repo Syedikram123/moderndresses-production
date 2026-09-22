@@ -68,9 +68,9 @@ export const AdminCategoriesList: React.FC = () => {
         const res = await compressImage(file, 900, 0.8);
         setCoverImage(res.dataUrl);
       }
-    } catch (err) {
-      console.error(err);
-      alert('Failed to upload image.');
+    } catch (err: any) {
+      console.error('Image upload error in AdminCategoriesList:', err);
+      alert(`Failed to upload image: ${err?.message || 'Unknown error'}`);
     }
   };
 

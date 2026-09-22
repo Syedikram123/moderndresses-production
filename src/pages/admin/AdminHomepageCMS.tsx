@@ -82,9 +82,9 @@ export const AdminHomepageCMS: React.FC = () => {
           promoBanner: { ...settings.promoBanner, image: res.dataUrl },
         });
       }
-    } catch (err) {
-      console.error(err);
-      alert('Failed to upload promo image.');
+    } catch (err: any) {
+      console.error('Promo image upload error:', err);
+      alert(`Failed to upload promo image: ${err?.message || 'Unknown error'}`);
     }
   };
 
@@ -107,9 +107,9 @@ export const AdminHomepageCMS: React.FC = () => {
           customSection: { ...settings.customSection, image: res.dataUrl },
         });
       }
-    } catch (err) {
-      console.error(err);
-      alert('Failed to upload custom section image.');
+    } catch (err: any) {
+      console.error('Custom image upload error:', err);
+      alert(`Failed to upload custom section image: ${err?.message || 'Unknown error'}`);
     }
   };
 

@@ -33,12 +33,18 @@ class SupabaseMediaService {
     path: string,
     blobOrFile: Blob | File,
     contentType = 'image/webp'
-  ): Promise<string | null> {
-    try {
-      const token = await auth?.currentUser?.getIdToken();
-      const base64Data = await blobToBase64(blobOrFile);
+  ): Promise<string> {
+    // Obtain active Firebase Auth token
+    let token = await auth?.currentUser?.getIdToken();
+    if (!token && auth?.currentUser) {
+      token = await auth.currentUser.getIdToken(true);
+    }
 
-      const response = await fetch('/api/media', {
+    const base64Data = await blobToBase64(blobOrFile);
+
+    let response: Response;
+    try {
+      response = await fetch('/api/media', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -51,15 +57,57 @@ class SupabaseMediaService {
           contentType,
         }),
       });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.publicUrl) return data.publicUrl;
-      }
-    } catch (err) {
-      console.warn('Upload via /api/media not reachable, falling back to direct client:', err);
+    } catch (networkErr: any) {
+      console.warn('Network error calling /api/media, trying direct fallback:', networkErr);
+      return this.uploadDirect(path, blobOrFile, contentType);
     }
-    return null;
+
+    const resJson = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      const errorMsg =
+        resJson?.error ||
+        `Upload API error (Status ${response.status}: ${response.statusText})`;
+      console.error('Server media upload failed:', errorMsg);
+      throw new Error(errorMsg);
+    }
+
+    if (resJson?.publicUrl) {
+      return resJson.publicUrl;
+    }
+
+    throw new Error('Upload completed on server, but no public image URL was returned.');
+  }
+
+  /**
+   * Direct upload fallback (only for offline/local standalone development)
+   */
+  private async uploadDirect(
+    path: string,
+    blobOrFile: Blob | File,
+    contentType = 'image/webp'
+  ): Promise<string> {
+    if (!this.isConfigured() || !supabase) {
+      throw new Error('Supabase Storage is not configured.');
+    }
+
+    const { data, error } = await supabase.storage
+      .from(this.bucket)
+      .upload(path, blobOrFile, {
+        contentType,
+        upsert: true,
+      });
+
+    if (error) {
+      console.error('Supabase direct upload error:', error);
+      throw new Error(`Direct upload failed: ${error.message}`);
+    }
+
+    const { data: publicUrlData } = supabase.storage
+      .from(this.bucket)
+      .getPublicUrl(data.path);
+
+    return publicUrlData.publicUrl;
   }
 
   /**
@@ -83,8 +131,11 @@ class SupabaseMediaService {
       if (response.ok) {
         return true;
       }
+
+      const resJson = await response.json().catch(() => null);
+      console.warn('Serverless delete error:', resJson?.error || response.statusText);
     } catch (err) {
-      console.warn('Delete via /api/media failed, trying direct:', err);
+      console.warn('Delete via /api/media network error:', err);
     }
     return false;
   }
@@ -110,8 +161,11 @@ class SupabaseMediaService {
       if (response.ok) {
         return true;
       }
+
+      const resJson = await response.json().catch(() => null);
+      console.warn('Serverless delete-folder error:', resJson?.error || response.statusText);
     } catch (err) {
-      console.warn('Delete folder via /api/media failed:', err);
+      console.warn('Delete folder via /api/media network error:', err);
     }
     return false;
   }
@@ -130,34 +184,7 @@ class SupabaseMediaService {
     const filename = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}.webp`;
     const path = `products/${cleanProductId}/colors/${cleanColourId}/${filename}`;
 
-    // 1. Try secure Serverless API first
-    const apiUrl = await this.uploadViaApi(path, blobOrFile, 'image/webp');
-    if (apiUrl) {
-      return apiUrl;
-    }
-
-    // 2. Direct client fallback
-    if (!this.isConfigured() || !supabase) {
-      throw new Error('Supabase Storage is not configured.');
-    }
-
-    const { data, error } = await supabase.storage
-      .from(this.bucket)
-      .upload(path, blobOrFile, {
-        contentType: 'image/webp',
-        upsert: true,
-      });
-
-    if (error) {
-      console.error('Supabase uploadProductImage error:', error);
-      throw new Error(`Failed to upload product image: ${error.message}`);
-    }
-
-    const { data: publicUrlData } = supabase.storage
-      .from(this.bucket)
-      .getPublicUrl(data.path);
-
-    return publicUrlData.publicUrl;
+    return this.uploadViaApi(path, blobOrFile, 'image/webp');
   }
 
   /**
@@ -171,34 +198,7 @@ class SupabaseMediaService {
     const cleanCatId = categoryId.replace(/[^a-zA-Z0-9-_]/g, '_');
     const path = `categories/${cleanCatId}/cover_${Date.now()}.webp`;
 
-    // 1. Try secure Serverless API first
-    const apiUrl = await this.uploadViaApi(path, blobOrFile, 'image/webp');
-    if (apiUrl) {
-      return apiUrl;
-    }
-
-    // 2. Direct client fallback
-    if (!this.isConfigured() || !supabase) {
-      throw new Error('Supabase Storage is not configured.');
-    }
-
-    const { data, error } = await supabase.storage
-      .from(this.bucket)
-      .upload(path, blobOrFile, {
-        contentType: 'image/webp',
-        upsert: true,
-      });
-
-    if (error) {
-      console.error('Supabase uploadCategoryCover error:', error);
-      throw new Error(`Failed to upload category cover: ${error.message}`);
-    }
-
-    const { data: publicUrlData } = supabase.storage
-      .from(this.bucket)
-      .getPublicUrl(data.path);
-
-    return publicUrlData.publicUrl;
+    return this.uploadViaApi(path, blobOrFile, 'image/webp');
   }
 
   /**
@@ -212,34 +212,7 @@ class SupabaseMediaService {
     const cleanSubId = subcategoryId.replace(/[^a-zA-Z0-9-_]/g, '_');
     const path = `subcategories/${cleanSubId}/cover_${Date.now()}.webp`;
 
-    // 1. Try secure Serverless API first
-    const apiUrl = await this.uploadViaApi(path, blobOrFile, 'image/webp');
-    if (apiUrl) {
-      return apiUrl;
-    }
-
-    // 2. Direct client fallback
-    if (!this.isConfigured() || !supabase) {
-      throw new Error('Supabase Storage is not configured.');
-    }
-
-    const { data, error } = await supabase.storage
-      .from(this.bucket)
-      .upload(path, blobOrFile, {
-        contentType: 'image/webp',
-        upsert: true,
-      });
-
-    if (error) {
-      console.error('Supabase uploadSubcategoryCover error:', error);
-      throw new Error(`Failed to upload subcategory cover: ${error.message}`);
-    }
-
-    const { data: publicUrlData } = supabase.storage
-      .from(this.bucket)
-      .getPublicUrl(data.path);
-
-    return publicUrlData.publicUrl;
+    return this.uploadViaApi(path, blobOrFile, 'image/webp');
   }
 
   /**
@@ -253,34 +226,7 @@ class SupabaseMediaService {
     const cleanName = bannerName.replace(/[^a-zA-Z0-9-_]/g, '_');
     const path = `banners/${cleanName}_${Date.now()}.webp`;
 
-    // 1. Try secure Serverless API first
-    const apiUrl = await this.uploadViaApi(path, blobOrFile, 'image/webp');
-    if (apiUrl) {
-      return apiUrl;
-    }
-
-    // 2. Direct client fallback
-    if (!this.isConfigured() || !supabase) {
-      throw new Error('Supabase Storage is not configured.');
-    }
-
-    const { data, error } = await supabase.storage
-      .from(this.bucket)
-      .upload(path, blobOrFile, {
-        contentType: 'image/webp',
-        upsert: true,
-      });
-
-    if (error) {
-      console.error('Supabase uploadBanner error:', error);
-      throw new Error(`Failed to upload banner: ${error.message}`);
-    }
-
-    const { data: publicUrlData } = supabase.storage
-      .from(this.bucket)
-      .getPublicUrl(data.path);
-
-    return publicUrlData.publicUrl;
+    return this.uploadViaApi(path, blobOrFile, 'image/webp');
   }
 
   /**
