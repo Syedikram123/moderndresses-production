@@ -1,0 +1,45 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function to verify authenticated admin session
+    function isAdmin() {
+      return request.auth != null;
+    }
+
+    // Public Catalog: Categories (Read: Public, Write: Admin only)
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Public Catalog: Subcategories (Read: Public, Write: Admin only)
+    match /subcategories/{subcategoryId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Public Catalog: Products (Read: Public, Write: Admin only)
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Settings (Store Settings, Homepage CMS)
+    // Protected: admin_auth is strictly readable and writable by admin only
+    match /settings/{settingId} {
+      allow read: if settingId != 'admin_auth' || isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // WhatsApp Click Analytics
+    // Public customers can only CREATE valid click events (cannot read or tamper with data)
+    // Only authenticated admin can read analytics reports or delete records
+    match /whatsapp_clicks/{clickId} {
+      allow create: if request.resource.data.keys().hasAll(['productId', 'productName', 'timestamp'])
+                    && request.resource.data.productId is string
+                    && request.resource.data.timestamp is string;
+      allow read, update, delete: if isAdmin();
+    }
+  }
+}

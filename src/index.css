@@ -1,0 +1,41 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-boutique-50 text-charcoal font-sans antialiased;
+  }
+
+  h1, h2, h3, .font-editorial {
+    font-family: 'Playfair Display', Georgia, serif;
+  }
+
+  .font-ornate {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+  }
+}
+
+/* Custom boutique scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #F7F3EE;
+}
+::-webkit-scrollbar-thumb {
+  background: #C5B198;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #A78F73;
+}
+
+/* Smooth image zoom & transitions */
+.img-zoom-hover {
+  @apply transition-transform duration-700 ease-out;
+}
+.group:hover .img-zoom-hover {
+  @apply scale-105;
+}
