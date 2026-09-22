@@ -2,16 +2,35 @@ import { createClient } from '@supabase/supabase-js';
 
 const BUCKET_NAME = 'modern-dresses';
 
+function sanitizeUrl(url: string | undefined): string {
+  if (!url) return '';
+  return url
+    .trim()
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .replace(/^["']|["']$/g, '')
+    .replace(/\/+$/, '');
+}
+
+function sanitizeKey(key: string | undefined): string {
+  if (!key) return '';
+  return key
+    .trim()
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .replace(/^["']|["']$/g, '');
+}
+
 // Server-side environment variables (Vercel Serverless Function)
-const supabaseUrl =
+const supabaseUrl = sanitizeUrl(
   process.env.SUPABASE_URL ||
   process.env.VITE_SUPABASE_URL ||
-  'https://ljwiekmbnippkvnlkrdi.supabase.co';
+  'https://ljwiekmbnippkvnlkrdi.supabase.co'
+);
 
-const serviceRoleKey =
+const serviceRoleKey = sanitizeKey(
   process.env.SUPABASE_SERVICE_ROLE_KEY ||
   process.env.SUPABASE_SECRET_KEY ||
-  '';
+  ''
+);
 
 export default async function handler(req: any, res: any) {
   // Enable CORS for same-origin and development requests
@@ -72,29 +91,71 @@ export default async function handler(req: any, res: any) {
       // Clean base64 string if data URL prefix exists
       const cleanBase64 = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
       const buffer = Buffer.from(cleanBase64, 'base64');
+      const uint8Array = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
 
-      const { data, error } = await supabase.storage
-        .from(BUCKET_NAME)
-        .upload(path, buffer, {
-          contentType,
-          upsert: true,
-        });
+      let publicUrl = `${supabaseUrl}/storage/v1/object/public/${BUCKET_NAME}/${path}`;
+      let uploadSuccess = false;
+      let lastError = '';
 
-      if (error) {
-        console.error('Server storage upload error:', error);
-        return res.status(500).json({
-          error: `Supabase Storage upload error: ${error.message}. Ensure bucket "${BUCKET_NAME}" exists in Supabase.`,
-        });
+      // 1. Primary: SDK upload
+      try {
+        const { data, error } = await supabase.storage
+          .from(BUCKET_NAME)
+          .upload(path, uint8Array, {
+            contentType,
+            upsert: true,
+          });
+
+        if (!error && data) {
+          uploadSuccess = true;
+          const { data: publicUrlData } = supabase.storage
+            .from(BUCKET_NAME)
+            .getPublicUrl(data.path);
+          publicUrl = publicUrlData.publicUrl;
+        } else if (error) {
+          lastError = error.message;
+          console.warn('SDK upload returned error, attempting REST fallback:', error.message);
+        }
+      } catch (sdkErr: any) {
+        lastError = sdkErr?.message || 'SDK upload exception';
+        console.warn('SDK upload exception, attempting REST fallback:', sdkErr.message);
       }
 
-      const { data: publicUrlData } = supabase.storage
-        .from(BUCKET_NAME)
-        .getPublicUrl(data.path);
+      // 2. Secondary fallback: Direct Supabase Storage REST endpoint
+      if (!uploadSuccess) {
+        try {
+          const restUrl = `${supabaseUrl}/storage/v1/object/${BUCKET_NAME}/${path}`;
+          const restRes = await fetch(restUrl, {
+            method: 'POST',
+            headers: {
+              apikey: serviceRoleKey,
+              Authorization: `Bearer ${serviceRoleKey}`,
+              'Content-Type': contentType,
+              'x-upsert': 'true',
+            },
+            body: buffer,
+          });
+
+          if (restRes.ok) {
+            uploadSuccess = true;
+          } else {
+            const restErrText = await restRes.text().catch(() => '');
+            return res.status(restRes.status).json({
+              error: `Supabase Storage upload error (${restRes.status}): ${restErrText || restRes.statusText}. (Target: ${supabaseUrl})`,
+            });
+          }
+        } catch (restErr: any) {
+          const causeText = restErr?.cause ? ` (Cause: ${restErr.cause.message || restErr.cause.code || restErr.cause})` : '';
+          return res.status(500).json({
+            error: `Supabase Storage network error: ${restErr.message}${causeText}. Target Project URL: ${supabaseUrl}. Please ensure this Supabase project is active and accessible.`,
+          });
+        }
+      }
 
       return res.status(200).json({
         success: true,
-        publicUrl: publicUrlData.publicUrl,
-        path: data.path,
+        publicUrl,
+        path,
       });
     }
 
@@ -106,8 +167,22 @@ export default async function handler(req: any, res: any) {
 
       const { error } = await supabase.storage.from(BUCKET_NAME).remove(paths);
       if (error) {
-        console.error('Server storage delete error:', error);
-        return res.status(500).json({ error: error.message });
+        console.warn('SDK delete error, trying REST fallback:', error.message);
+        const restDelUrl = `${supabaseUrl}/storage/v1/object/${BUCKET_NAME}`;
+        const restRes = await fetch(restDelUrl, {
+          method: 'DELETE',
+          headers: {
+            apikey: serviceRoleKey,
+            Authorization: `Bearer ${serviceRoleKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ prefixes: paths }),
+        });
+
+        if (!restRes.ok) {
+          const restErrText = await restRes.text().catch(() => '');
+          return res.status(restRes.status).json({ error: `Delete failed: ${restErrText || restRes.statusText}` });
+        }
       }
 
       return res.status(200).json({ success: true, deleted: paths });
@@ -148,7 +223,10 @@ export default async function handler(req: any, res: any) {
     return res.status(400).json({ error: `Unknown action: ${action}` });
   } catch (err: any) {
     console.error('Server media endpoint exception:', err);
-    return res.status(500).json({ error: err.message || 'Internal server error.' });
+    const causeMsg = err?.cause ? ` (Cause: ${err.cause.message || err.cause.code || err.cause})` : '';
+    return res.status(500).json({
+      error: `Media server error: ${err.message || 'Internal server error.'}${causeMsg}. (Target URL: ${supabaseUrl})`,
+    });
   }
 }
 
