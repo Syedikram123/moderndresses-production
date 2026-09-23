@@ -4,7 +4,7 @@ import { useStore } from '../../context/StoreContext';
 import { storageService } from '../../services/storage';
 import { HomepageSettings } from '../../types';
 import { compressImage, compressImageToWebP } from '../../utils/imageCompressor';
-import { supabaseMediaService } from '../../services/storage/SupabaseMediaService';
+import { cloudinaryMediaService } from '../../services/storage/CloudinaryMediaService';
 
 export const AdminHomepageCMS: React.FC = () => {
   const { homepageSettings, categories, refreshSettings } = useStore();
@@ -40,11 +40,11 @@ export const AdminHomepageCMS: React.FC = () => {
 
   const handleHeroImageUpload = async (file: File) => {
     try {
-      if (supabaseMediaService.isConfigured()) {
+      if (cloudinaryMediaService.isConfigured()) {
         const webpResult = await compressImageToWebP(file, 1200, 0.82);
-        const url = await supabaseMediaService.uploadBanner('hero', webpResult.blob);
+        const url = await cloudinaryMediaService.uploadBanner('hero', webpResult.blob);
         if (settings.hero.image && settings.hero.image !== url) {
-          supabaseMediaService.deleteMediaByUrlOrPath(settings.hero.image);
+          cloudinaryMediaService.deleteMediaByUrlOrPath(settings.hero.image);
         }
         setSettings({
           ...settings,
@@ -57,19 +57,19 @@ export const AdminHomepageCMS: React.FC = () => {
           hero: { ...settings.hero, image: res.dataUrl },
         });
       }
-    } catch (err) {
-      console.error(err);
-      alert('Failed to upload hero image.');
+    } catch (err: any) {
+      console.error('Hero image upload error:', err);
+      alert(`Failed to upload hero image: ${err?.message || 'Unknown error'}`);
     }
   };
 
   const handlePromoImageUpload = async (file: File) => {
     try {
-      if (supabaseMediaService.isConfigured()) {
+      if (cloudinaryMediaService.isConfigured()) {
         const webpResult = await compressImageToWebP(file, 1200, 0.82);
-        const url = await supabaseMediaService.uploadBanner('promo', webpResult.blob);
+        const url = await cloudinaryMediaService.uploadBanner('promo', webpResult.blob);
         if (settings.promoBanner.image && settings.promoBanner.image !== url) {
-          supabaseMediaService.deleteMediaByUrlOrPath(settings.promoBanner.image);
+          cloudinaryMediaService.deleteMediaByUrlOrPath(settings.promoBanner.image);
         }
         setSettings({
           ...settings,
@@ -90,11 +90,11 @@ export const AdminHomepageCMS: React.FC = () => {
 
   const handleCustomImageUpload = async (file: File) => {
     try {
-      if (supabaseMediaService.isConfigured()) {
+      if (cloudinaryMediaService.isConfigured()) {
         const webpResult = await compressImageToWebP(file, 1000, 0.82);
-        const url = await supabaseMediaService.uploadBanner('custom', webpResult.blob);
+        const url = await cloudinaryMediaService.uploadBanner('custom', webpResult.blob);
         if (settings.customSection.image && settings.customSection.image !== url) {
-          supabaseMediaService.deleteMediaByUrlOrPath(settings.customSection.image);
+          cloudinaryMediaService.deleteMediaByUrlOrPath(settings.customSection.image);
         }
         setSettings({
           ...settings,

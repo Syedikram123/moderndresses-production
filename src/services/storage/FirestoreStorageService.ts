@@ -20,7 +20,7 @@ import {
 } from '../../types';
 import { db, isFirebaseConfigured } from '../../config/firebase';
 import { LocalStorageService } from './LocalStorageService';
-import { supabaseMediaService } from './SupabaseMediaService';
+import { cloudinaryMediaService } from './CloudinaryMediaService';
 import { runInitialMigrationIfEmpty } from './migrationService';
 import { generateProductId, slugify } from '../../utils/formatters';
 import { LOCAL_STORAGE_SEED } from '../../data/localStorageSeed';
@@ -255,14 +255,14 @@ class FirestoreStorageServiceImpl implements IStorageService {
 
       await batch.commit();
 
-      // Clean up associated Supabase media
+      // Clean up associated Cloudinary media
       for (const prod of products) {
-        await supabaseMediaService.deleteProductMedia(prod.id);
+        await cloudinaryMediaService.deleteProductMedia(prod.id);
       }
       for (const sub of subcategories) {
-        await supabaseMediaService.deleteSubcategoryMedia(sub.id, sub.coverImage);
+        await cloudinaryMediaService.deleteSubcategoryMedia(sub.id, sub.coverImage);
       }
-      await supabaseMediaService.deleteCategoryMedia(id, category?.coverImage);
+      await cloudinaryMediaService.deleteCategoryMedia(id, category?.coverImage);
 
       return {
         success: true,
@@ -379,9 +379,9 @@ class FirestoreStorageServiceImpl implements IStorageService {
       await batch.commit();
 
       for (const prod of products) {
-        await supabaseMediaService.deleteProductMedia(prod.id);
+        await cloudinaryMediaService.deleteProductMedia(prod.id);
       }
-      await supabaseMediaService.deleteSubcategoryMedia(id, subcategory?.coverImage);
+      await cloudinaryMediaService.deleteSubcategoryMedia(id, subcategory?.coverImage);
 
       return {
         success: true,
@@ -551,7 +551,7 @@ class FirestoreStorageServiceImpl implements IStorageService {
   async deleteProduct(id: string): Promise<boolean> {
     if (isFirebaseConfigured && db) {
       await deleteDoc(doc(db, 'products', id));
-      await supabaseMediaService.deleteProductMedia(id);
+      await cloudinaryMediaService.deleteProductMedia(id);
       return true;
     }
 

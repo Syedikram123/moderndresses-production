@@ -5,7 +5,7 @@ import { storageService } from '../../services/storage';
 import { Subcategory } from '../../types';
 import { slugify } from '../../utils/formatters';
 import { compressImage, compressImageToWebP } from '../../utils/imageCompressor';
-import { supabaseMediaService } from '../../services/storage/SupabaseMediaService';
+import { cloudinaryMediaService } from '../../services/storage/CloudinaryMediaService';
 
 export const AdminSubcategoriesList: React.FC = () => {
   const { categories, subcategories, products, refreshData } = useStore();
@@ -62,11 +62,11 @@ export const AdminSubcategoriesList: React.FC = () => {
   const handleImageUpload = async (file: File) => {
     try {
       const subId = editingSubcat?.id || `temp_${Date.now()}`;
-      if (supabaseMediaService.isConfigured()) {
+      if (cloudinaryMediaService.isConfigured()) {
         const webpResult = await compressImageToWebP(file, 900, 0.82);
-        const url = await supabaseMediaService.uploadSubcategoryCover(subId, webpResult.blob);
+        const url = await cloudinaryMediaService.uploadSubcategoryCover(subId, webpResult.blob);
         if (coverImage && coverImage !== url) {
-          supabaseMediaService.deleteMediaByUrlOrPath(coverImage);
+          cloudinaryMediaService.deleteMediaByUrlOrPath(coverImage);
         }
         setCoverImage(url);
       } else {

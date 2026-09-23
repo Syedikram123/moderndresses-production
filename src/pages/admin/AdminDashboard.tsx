@@ -92,7 +92,7 @@ export const AdminDashboard: React.FC = () => {
             <div>
               <h3 className="text-sm font-bold text-charcoal">Local Prototype Storage Service</h3>
               <p className="text-xs text-charcoal-muted">
-                Running clean abstraction layer ready for future Supabase migration without altering UI components
+                Running clean abstraction layer with Cloudinary for media and Firestore for data
               </p>
             </div>
           </div>

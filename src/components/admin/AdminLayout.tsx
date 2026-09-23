@@ -19,7 +19,7 @@ import {
 import { useAdminAuth } from '../../context/AdminAuthContext';
 import { useStore } from '../../context/StoreContext';
 import { isFirebaseConfigured } from '../../config/firebase';
-import { isSupabaseConfigured } from '../../config/supabase';
+import { isCloudinaryConfigured } from '../../config/cloudinary';
 
 export const AdminLayout: React.FC = () => {
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
@@ -107,8 +107,8 @@ export const AdminLayout: React.FC = () => {
               </span>
             </div>
             <div className="flex items-center justify-between text-[10px] text-stone-400 border-t border-stone-700/60 pt-1.5">
-              <span>Supabase Media</span>
-              <span className="text-stone-300 font-mono">{isSupabaseConfigured ? 'Connected' : 'Local'}</span>
+              <span>Cloudinary Media</span>
+              <span className="text-stone-300 font-mono">{isCloudinaryConfigured ? 'Connected' : 'Local'}</span>
             </div>
           </div>
 

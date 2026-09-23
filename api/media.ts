@@ -1,34 +1,28 @@
-import { createClient } from '@supabase/supabase-js';
+import { v2 as cloudinary } from 'cloudinary';
 
-const BUCKET_NAME = 'modern-dresses';
-
-function sanitizeUrl(url: string | undefined): string {
-  if (!url) return '';
-  return url
-    .trim()
-    .replace(/[\u200B-\u200D\uFEFF]/g, '')
-    .replace(/^["']|["']$/g, '')
-    .replace(/\/+$/, '');
-}
-
-function sanitizeKey(key: string | undefined): string {
-  if (!key) return '';
-  return key
+function sanitize(val: string | undefined): string {
+  if (!val) return '';
+  return val
     .trim()
     .replace(/[\u200B-\u200D\uFEFF]/g, '')
     .replace(/^["']|["']$/g, '');
 }
 
-// Server-side environment variables (Vercel Serverless Function)
-const supabaseUrl = sanitizeUrl(
-  process.env.SUPABASE_URL ||
-  process.env.VITE_SUPABASE_URL ||
-  'https://ljwiekmbnippkvnlkrdi.supabase.co'
+const cloudName = sanitize(
+  process.env.CLOUDINARY_CLOUD_NAME ||
+  process.env.VITE_CLOUDINARY_CLOUD_NAME ||
+  'dzkeh75jx'
 );
 
-const serviceRoleKey = sanitizeKey(
-  process.env.SUPABASE_SERVICE_ROLE_KEY ||
-  process.env.SUPABASE_SECRET_KEY ||
+const apiKey = sanitize(
+  process.env.CLOUDINARY_API_KEY ||
+  process.env.VITE_CLOUDINARY_API_KEY ||
+  ''
+);
+
+const apiSecret = sanitize(
+  process.env.CLOUDINARY_API_SECRET ||
+  process.env.CLOUDINARY_SECRET ||
   ''
 );
 
@@ -60,173 +54,131 @@ export default async function handler(req: any, res: any) {
   const authHeader = req.headers?.authorization || req.headers?.Authorization || '';
   if (!authHeader.startsWith('Bearer ')) {
     return res.status(401).json({
-      error: 'Unauthorized. An active admin authentication session token is required to upload/delete media.',
+      error: 'Unauthorized. An active admin authentication session token is required to manage media.',
     });
   }
 
-  // Verify server-side secret key configuration
-  if (!serviceRoleKey) {
+  // Check required Cloudinary server-side credentials
+  if (!apiSecret || !apiKey) {
     return res.status(500).json({
       error:
-        'Missing SUPABASE_SERVICE_ROLE_KEY in Vercel Environment Variables. Please copy the "service_role" secret key from Supabase Dashboard > Project Settings > API and add it as SUPABASE_SERVICE_ROLE_KEY in Vercel Project Settings > Environment Variables, then redeploy.',
+        'Missing CLOUDINARY_API_KEY or CLOUDINARY_API_SECRET in Vercel Environment Variables. Please configure them in Vercel Project Settings > Environment Variables, then redeploy.',
     });
   }
 
-  try {
-    const supabase = createClient(supabaseUrl, serviceRoleKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    });
+  // Configure Cloudinary SDK instance with server-side credentials
+  cloudinary.config({
+    cloud_name: cloudName,
+    api_key: apiKey,
+    api_secret: apiSecret,
+    secure: true,
+  });
 
+  try {
     const { action } = payload || {};
 
+    // 1. Direct Server-Side Upload (WebP Base64 -> Cloudinary)
     if (action === 'upload') {
-      const { path, base64Data, contentType = 'image/webp' } = payload;
-      if (!path || !base64Data) {
-        return res.status(400).json({ error: 'Missing path or base64Data for upload.' });
+      const { publicId, folder = 'modern_dresses', base64Data, contentType = 'image/webp' } = payload;
+      if (!base64Data) {
+        return res.status(400).json({ error: 'Missing base64Data for upload.' });
       }
 
-      // Clean base64 string if data URL prefix exists
-      const cleanBase64 = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
-      const buffer = Buffer.from(cleanBase64, 'base64');
-      const uint8Array = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+      const dataUri = base64Data.startsWith('data:')
+        ? base64Data
+        : `data:${contentType};base64,${base64Data}`;
 
-      let publicUrl = `${supabaseUrl}/storage/v1/object/public/${BUCKET_NAME}/${path}`;
-      let uploadSuccess = false;
-      let lastError = '';
+      const uploadOptions: any = {
+        folder,
+        overwrite: true,
+        resource_type: 'image',
+      };
 
-      // 1. Primary: SDK upload
-      try {
-        const { data, error } = await supabase.storage
-          .from(BUCKET_NAME)
-          .upload(path, uint8Array, {
-            contentType,
-            upsert: true,
-          });
-
-        if (!error && data) {
-          uploadSuccess = true;
-          const { data: publicUrlData } = supabase.storage
-            .from(BUCKET_NAME)
-            .getPublicUrl(data.path);
-          publicUrl = publicUrlData.publicUrl;
-        } else if (error) {
-          lastError = error.message;
-          console.warn('SDK upload returned error, attempting REST fallback:', error.message);
-        }
-      } catch (sdkErr: any) {
-        lastError = sdkErr?.message || 'SDK upload exception';
-        console.warn('SDK upload exception, attempting REST fallback:', sdkErr.message);
+      if (publicId) {
+        // Strip folder prefix if already included in publicId
+        const cleanPublicId = publicId.includes('/')
+          ? publicId.split('/').pop()
+          : publicId;
+        uploadOptions.public_id = cleanPublicId;
       }
 
-      // 2. Secondary fallback: Direct Supabase Storage REST endpoint
-      if (!uploadSuccess) {
-        try {
-          const restUrl = `${supabaseUrl}/storage/v1/object/${BUCKET_NAME}/${path}`;
-          const restRes = await fetch(restUrl, {
-            method: 'POST',
-            headers: {
-              apikey: serviceRoleKey,
-              Authorization: `Bearer ${serviceRoleKey}`,
-              'Content-Type': contentType,
-              'x-upsert': 'true',
-            },
-            body: buffer,
-          });
-
-          if (restRes.ok) {
-            uploadSuccess = true;
-          } else {
-            const restErrText = await restRes.text().catch(() => '');
-            return res.status(restRes.status).json({
-              error: `Supabase Storage upload error (${restRes.status}): ${restErrText || restRes.statusText}. (Target: ${supabaseUrl})`,
-            });
-          }
-        } catch (restErr: any) {
-          const causeText = restErr?.cause ? ` (Cause: ${restErr.cause.message || restErr.cause.code || restErr.cause})` : '';
-          return res.status(500).json({
-            error: `Supabase Storage network error: ${restErr.message}${causeText}. Target Project URL: ${supabaseUrl}. Please ensure this Supabase project is active and accessible.`,
-          });
-        }
-      }
+      const result = await cloudinary.uploader.upload(dataUri, uploadOptions);
 
       return res.status(200).json({
         success: true,
-        publicUrl,
-        path,
+        publicUrl: result.secure_url,
+        publicId: result.public_id,
+        format: result.format,
       });
     }
 
-    if (action === 'delete') {
-      const { paths } = payload;
-      if (!Array.isArray(paths) || paths.length === 0) {
-        return res.status(400).json({ error: 'Missing paths array for delete.' });
+    // 2. Generate Upload Signature for Direct Client Signed Uploads
+    if (action === 'sign') {
+      const { paramsToSign } = payload;
+      if (!paramsToSign || typeof paramsToSign !== 'object') {
+        return res.status(400).json({ error: 'Missing paramsToSign object.' });
       }
 
-      const { error } = await supabase.storage.from(BUCKET_NAME).remove(paths);
-      if (error) {
-        console.warn('SDK delete error, trying REST fallback:', error.message);
-        const restDelUrl = `${supabaseUrl}/storage/v1/object/${BUCKET_NAME}`;
-        const restRes = await fetch(restDelUrl, {
-          method: 'DELETE',
-          headers: {
-            apikey: serviceRoleKey,
-            Authorization: `Bearer ${serviceRoleKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ prefixes: paths }),
-        });
+      const signature = cloudinary.utils.api_sign_request(paramsToSign, apiSecret);
 
-        if (!restRes.ok) {
-          const restErrText = await restRes.text().catch(() => '');
-          return res.status(restRes.status).json({ error: `Delete failed: ${restErrText || restRes.statusText}` });
-        }
-      }
-
-      return res.status(200).json({ success: true, deleted: paths });
+      return res.status(200).json({
+        success: true,
+        signature,
+        apiKey,
+        cloudName,
+        timestamp: paramsToSign.timestamp,
+      });
     }
 
+    // 3. Delete individual assets by Public ID
+    if (action === 'delete') {
+      const { publicIds } = payload;
+      if (!Array.isArray(publicIds) || publicIds.length === 0) {
+        return res.status(400).json({ error: 'Missing publicIds array for delete.' });
+      }
+
+      const results = [];
+      for (const pid of publicIds) {
+        if (!pid) continue;
+        const delRes = await cloudinary.uploader.destroy(pid, {
+          invalidate: true,
+          resource_type: 'image',
+        });
+        results.push({ publicId: pid, result: delRes.result });
+      }
+
+      return res.status(200).json({ success: true, deleted: results });
+    }
+
+    // 4. Delete entire folder / prefix (e.g. when product is deleted)
     if (action === 'delete-folder') {
       const { folderPrefix } = payload;
       if (!folderPrefix) {
         return res.status(400).json({ error: 'Missing folderPrefix.' });
       }
 
-      // Recursively list and delete
-      const deleteFolderRecursive = async (prefix: string) => {
-        const { data: files, error: listErr } = await supabase.storage
-          .from(BUCKET_NAME)
-          .list(prefix, { limit: 100 });
+      try {
+        await cloudinary.api.delete_resources_by_prefix(folderPrefix, {
+          resource_type: 'image',
+        });
+      } catch (err: any) {
+        console.warn('delete_resources_by_prefix warning:', err?.message);
+      }
 
-        if (listErr || !files || files.length === 0) return;
+      try {
+        await cloudinary.api.delete_folder(folderPrefix);
+      } catch (err: any) {
+        console.warn('delete_folder warning:', err?.message);
+      }
 
-        const filesToRemove: string[] = [];
-        for (const item of files) {
-          if (item.id === null) {
-            await deleteFolderRecursive(`${prefix}/${item.name}`);
-          } else {
-            filesToRemove.push(`${prefix}/${item.name}`);
-          }
-        }
-
-        if (filesToRemove.length > 0) {
-          await supabase.storage.from(BUCKET_NAME).remove(filesToRemove);
-        }
-      };
-
-      await deleteFolderRecursive(folderPrefix);
       return res.status(200).json({ success: true, folder: folderPrefix });
     }
 
     return res.status(400).json({ error: `Unknown action: ${action}` });
   } catch (err: any) {
-    console.error('Server media endpoint exception:', err);
-    const causeMsg = err?.cause ? ` (Cause: ${err.cause.message || err.cause.code || err.cause})` : '';
+    console.error('Cloudinary media API exception:', err);
     return res.status(500).json({
-      error: `Media server error: ${err.message || 'Internal server error.'}${causeMsg}. (Target URL: ${supabaseUrl})`,
+      error: `Cloudinary server error: ${err.message || 'Internal server error.'}`,
     });
   }
 }
-

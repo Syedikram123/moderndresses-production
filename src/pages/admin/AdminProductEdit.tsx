@@ -16,7 +16,7 @@ import { storageService } from '../../services/storage';
 import { Product, ProductColour, ProductStatus } from '../../types';
 import { slugify, calculateDiscount } from '../../utils/formatters';
 import { compressImage, compressImageToWebP } from '../../utils/imageCompressor';
-import { supabaseMediaService } from '../../services/storage/SupabaseMediaService';
+import { cloudinaryMediaService } from '../../services/storage/CloudinaryMediaService';
 
 const PRESET_TAGS = [
   'New',
@@ -205,9 +205,9 @@ export const AdminProductEdit: React.FC = () => {
       return;
     }
     const colToRemove = colours.find((c) => c.id === colourId);
-    if (colToRemove && supabaseMediaService.isConfigured()) {
+    if (colToRemove && cloudinaryMediaService.isConfigured()) {
       for (const imgUrl of colToRemove.images) {
-        supabaseMediaService.deleteMediaByUrlOrPath(imgUrl);
+        cloudinaryMediaService.deleteMediaByUrlOrPath(imgUrl);
       }
     }
     setColours(colours.filter((c) => c.id !== colourId));
@@ -224,7 +224,7 @@ export const AdminProductEdit: React.FC = () => {
     );
   };
 
-  // Image Upload with Supabase Storage & WebP compression (fallback to canvas)
+  // Image Upload with Cloudinary Storage & WebP compression (fallback to canvas)
   const handleImageFileUpload = async (colourId: string, file: File) => {
     const col = colours.find((c) => c.id === colourId);
     if (!col) return;
@@ -238,9 +238,9 @@ export const AdminProductEdit: React.FC = () => {
       let finalImageUrl = '';
       const targetProductId = id || `temp_${Date.now()}`;
 
-      if (supabaseMediaService.isConfigured()) {
+      if (cloudinaryMediaService.isConfigured()) {
         const webpResult = await compressImageToWebP(file, 900, 0.82);
-        finalImageUrl = await supabaseMediaService.uploadProductImage(
+        finalImageUrl = await cloudinaryMediaService.uploadProductImage(
           targetProductId,
           colourId,
           webpResult.blob
@@ -289,8 +289,8 @@ export const AdminProductEdit: React.FC = () => {
   const handleRemoveImage = (colourId: string, imageIndex: number) => {
     const col = colours.find((c) => c.id === colourId);
     const imgUrlToRemove = col?.images[imageIndex];
-    if (imgUrlToRemove && supabaseMediaService.isConfigured()) {
-      supabaseMediaService.deleteMediaByUrlOrPath(imgUrlToRemove);
+    if (imgUrlToRemove && cloudinaryMediaService.isConfigured()) {
+      cloudinaryMediaService.deleteMediaByUrlOrPath(imgUrlToRemove);
     }
 
     setColours(

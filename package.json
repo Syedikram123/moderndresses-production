@@ -10,7 +10,7 @@
     "generate-icons": "node generate-pwa-icons.cjs"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.116.0",
+    "cloudinary": "^2.11.0",
     "firebase": "^12.19.0",
     "lucide-react": "^1.16.0",
     "react": "^18.3.1",
