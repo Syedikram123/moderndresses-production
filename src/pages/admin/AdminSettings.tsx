@@ -164,7 +164,7 @@ export const AdminSettings: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="font-editorial text-3xl font-bold text-charcoal">
-            Store & WhatsApp Settings
+            Password & WhatsApp Settings
           </h1>
         
         </div>
@@ -181,7 +181,7 @@ export const AdminSettings: React.FC = () => {
       </div>
 
       {/* DATA BACKUP & LOCALSTORAGE CONTROLS (Requirements #51, #52, #53) */}
-      <div className="bg-white p-6 rounded-3xl border border-stone-200 shadow-soft space-y-4">
+   {/*   <div className="bg-white p-6 rounded-3xl border border-stone-200 shadow-soft space-y-4">
         <div className="flex items-center justify-between pb-3 border-b border-stone-100">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-boutique-100 rounded-xl text-charcoal">
@@ -232,7 +232,7 @@ export const AdminSettings: React.FC = () => {
             <span>Reset Demo Data</span>
           </button>
         </div>
-      </div>
+      </div> */}
 
       {/* ADMIN SECURITY & PASSWORD MANAGEMENT */}
       <div className="bg-white p-6 rounded-3xl border border-stone-200 shadow-soft space-y-5">
@@ -243,11 +243,9 @@ export const AdminSettings: React.FC = () => {
             </div>
             <div>
               <h2 className="font-editorial text-lg font-bold text-charcoal">
-                Admin Authentication & Password Security
+                Password Security
               </h2>
-              <p className="text-xs text-charcoal-muted">
-                Protected by salted SHA-256 hashing in Firestore (settings/admin_auth)
-              </p>
+              
             </div>
           </div>
         </div>
@@ -297,13 +295,13 @@ export const AdminSettings: React.FC = () => {
                 <input
                   type="password"
                   required
-                  placeholder="Min 8 chars, Aa1"
+                  placeholder="Enter a strong Password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   className="w-full bg-stone-50 border border-stone-200 rounded-xl pl-9 pr-3 py-2.5 text-charcoal focus:outline-none"
                 />
               </div>
-              <p className="text-[10px] text-charcoal-subtle mt-0.5">Min 8 chars, 1 upper, 1 lower, 1 number</p>
+              <p className="text-[10px] text-charcoal-subtle mt-0.5"></p>
             </div>
 
             <div>
@@ -329,7 +327,7 @@ export const AdminSettings: React.FC = () => {
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-2">
             <div className="flex items-center gap-2 text-xs text-charcoal-muted">
               <KeyRound className="w-3.5 h-3.5 text-gold-700 flex-shrink-0" />
-              <span>Password recovery configured securely in Firestore</span>
+              <span>Password is saving securely</span>
             </div>
 
             <button
@@ -353,18 +351,16 @@ export const AdminSettings: React.FC = () => {
             </div>
             <div>
               <h2 className="font-editorial text-lg font-bold text-charcoal">
-                WhatsApp Configuration & Buttons
+                WhatsApp Buttons
               </h2>
-              <p className="text-xs text-charcoal-muted">
-                Configure the boutique number and custom call-to-action text for product inquiries
-              </p>
+              
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
             <div>
               <label className="block font-bold uppercase tracking-wider text-charcoal mb-1">
-                WhatsApp Phone Number * (Indian format)
+                WhatsApp Phone Number (10 Digit)
               </label>
               <input
                 type="text"
@@ -381,7 +377,7 @@ export const AdminSettings: React.FC = () => {
 
             <div>
               <label className="block font-bold uppercase tracking-wider text-charcoal mb-1">
-                Standard WhatsApp CTA Button Text
+                Price - CTA Button Text
               </label>
               <input
                 type="text"
@@ -394,7 +390,7 @@ export const AdminSettings: React.FC = () => {
 
             <div>
               <label className="block font-bold uppercase tracking-wider text-charcoal mb-1">
-                Hidden Price CTA Button Text
+                Hidden Price - CTA Button Text
               </label>
               <input
                 type="text"
@@ -409,7 +405,7 @@ export const AdminSettings: React.FC = () => {
 
             <div>
               <label className="block font-bold uppercase tracking-wider text-charcoal mb-1">
-                Out Of Stock CTA Button Text
+                Out Of Stock - CTA Button Text
               </label>
               <input
                 type="text"

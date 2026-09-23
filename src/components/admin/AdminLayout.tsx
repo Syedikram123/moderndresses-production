@@ -40,7 +40,7 @@ export const AdminLayout: React.FC = () => {
     { name: 'Subcategories', path: '/admin/subcategories', icon: Tags },
     { name: 'WHATSAPP CLICKS', path: '/admin/whatsapp-clicks', icon: MessageCircle },
     { name: 'Homepage Settings', path: '/admin/homepage', icon: Sliders },
-    { name: 'Store Settings', path: '/admin/settings', icon: Settings },
+    { name: 'Other Settings', path: '/admin/settings', icon: Settings },
   ];
 
   const isCurrent = (path: string, exact?: boolean) => {
@@ -99,7 +99,7 @@ export const AdminLayout: React.FC = () => {
             <div className="flex items-center justify-between text-stone-300">
               <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase">
                 <Cloud className="w-3.5 h-3.5 text-gold-400" />
-                <span>{isFirebaseConfigured ? 'Firestore DB' : 'Local Storage'}</span>
+                <span>{isFirebaseConfigured ? 'DB Connected' : 'Local Storage'}</span>
               </span>
               <span className="flex items-center gap-1">
                 <span className={`w-2 h-2 rounded-full ${isFirebaseConfigured ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`}></span>
@@ -107,7 +107,7 @@ export const AdminLayout: React.FC = () => {
               </span>
             </div>
             <div className="flex items-center justify-between text-[10px] text-stone-400 border-t border-stone-700/60 pt-1.5">
-              <span>Cloudinary Media</span>
+              <span>Media Connected</span>
               <span className="text-stone-300 font-mono">{isCloudinaryConfigured ? 'Connected' : 'Local'}</span>
             </div>
           </div>
@@ -214,7 +214,7 @@ export const AdminLayout: React.FC = () => {
                   ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
                   : 'bg-amber-100 text-amber-900 border-amber-300'
               }`}>
-                {isFirebaseConfigured ? 'CLOUD FIRESTORE' : 'LOCAL DEMO MODE'}
+                {isFirebaseConfigured ? 'Real Time Cloud Connected' : 'LOCALFirestore DB MODE'}
               </span>
             </div>
           </div>
