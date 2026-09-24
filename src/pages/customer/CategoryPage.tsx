@@ -5,6 +5,7 @@ import { useStore } from '../../context/StoreContext';
 import { ProductCard } from '../../components/customer/ProductCard';
 import { FilterBar, FilterState } from '../../components/customer/FilterBar';
 import { Breadcrumbs } from '../../components/common/Breadcrumbs';
+import { getOptimizedImageUrl } from '../../utils/imageOptimizer';
 
 export const CategoryPage: React.FC = () => {
   const { categorySlug } = useParams<{ categorySlug: string }>();
@@ -143,10 +144,11 @@ export const CategoryPage: React.FC = () => {
                   className="group relative aspect-[3/4] rounded-2xl overflow-hidden border border-boutique-200 shadow-soft hover:shadow-card transition-all block"
                 >
                   <img
-                    src={sub.coverImage}
+                    src={getOptimizedImageUrl(sub.coverImage, { width: 400 })}
                     alt={sub.name}
                     className="w-full h-full object-cover object-center img-zoom-hover"
                     loading="lazy"
+                    decoding="async"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-charcoal/85 via-charcoal/20 to-transparent" />
                   <div className="absolute inset-x-0 bottom-0 p-3 sm:p-4 text-white">

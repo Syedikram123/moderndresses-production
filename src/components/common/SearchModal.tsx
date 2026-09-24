@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Search, X, ArrowRight } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { formatPrice } from '../../utils/formatters';
+import { getOptimizedImageUrl } from '../../utils/imageOptimizer';
 
 interface SearchModalProps {
   isOpen: boolean;
@@ -104,6 +105,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => 
             results.map((product) => {
               const category = categories.find((c) => c.id === product.categoryId);
               const mainImage = product.colours[0]?.images[0] || '';
+              const optimizedThumbnail = getOptimizedImageUrl(mainImage, { width: 120 });
               return (
                 <div
                   key={product.id}
@@ -111,10 +113,11 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => 
                   className="flex items-center gap-4 py-3 px-2 rounded-xl hover:bg-boutique-50 cursor-pointer transition-colors group"
                 >
                   <img
-                    src={mainImage}
+                    src={optimizedThumbnail}
                     alt={product.name}
                     className="w-14 h-18 object-cover rounded-lg bg-boutique-100 flex-shrink-0"
                     loading="lazy"
+                    decoding="async"
                   />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">

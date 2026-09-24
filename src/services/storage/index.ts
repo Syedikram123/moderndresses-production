@@ -9,4 +9,5 @@ export { FirestoreStorageService } from './FirestoreStorageService';
 export { LocalStorageService } from './LocalStorageService';
 export { cloudinaryMediaService } from './CloudinaryMediaService';
 export { runInitialMigrationIfEmpty } from './migrationService';
+export * from './catalogCache';
 

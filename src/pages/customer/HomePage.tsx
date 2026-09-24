@@ -5,6 +5,7 @@ import { useStore } from '../../context/StoreContext';
 import { CategoryCard } from '../../components/customer/CategoryCard';
 import { ProductCard } from '../../components/customer/ProductCard';
 import { CategoryCardSkeleton, ProductCardSkeleton } from '../../components/common/SkeletonLoader';
+import { getOptimizedImageUrl } from '../../utils/imageOptimizer';
 
 export const HomePage: React.FC = () => {
   const { categories, subcategories, products, homepageSettings, isLoading } = useStore();
@@ -88,10 +89,11 @@ export const HomePage: React.FC = () => {
               <div className="lg:col-span-5 relative">
                 <div className="relative aspect-[3/4] rounded-3xl overflow-hidden shadow-elevated border-8 border-white">
                   <img
-                    src={hero.image}
+                    src={getOptimizedImageUrl(hero.image, { width: 1200 })}
                     alt="Modern Dresses Editorial Collection"
                     className="w-full h-full object-cover object-center"
                     loading="eager"
+                    decoding="async"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-charcoal/60 via-transparent to-transparent" />
                   <div className="absolute bottom-6 left-6 right-6 text-white">
@@ -185,10 +187,11 @@ export const HomePage: React.FC = () => {
         <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="relative rounded-3xl overflow-hidden shadow-elevated bg-charcoal min-h-[380px] sm:min-h-[440px] flex items-center">
             <img
-              src={promoBanner.image}
+              src={getOptimizedImageUrl(promoBanner.image, { width: 1200 })}
               alt={promoBanner.heading}
               className="absolute inset-0 w-full h-full object-cover object-center opacity-40 mix-blend-overlay"
               loading="lazy"
+              decoding="async"
             />
             <div className="absolute inset-0 bg-gradient-to-r from-charcoal via-charcoal/80 to-transparent" />
 
@@ -299,10 +302,11 @@ export const HomePage: React.FC = () => {
               <div className="lg:col-span-5">
                 <div className="aspect-[4/3] rounded-2xl overflow-hidden shadow-card">
                   <img
-                    src={customSection.image}
+                    src={getOptimizedImageUrl(customSection.image, { width: 800 })}
                     alt={customSection.heading}
                     className="w-full h-full object-cover"
                     loading="lazy"
+                    decoding="async"
                   />
                 </div>
               </div>

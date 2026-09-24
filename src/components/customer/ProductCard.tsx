@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ArrowUpRight } from 'lucide-react';
 import { Product, Category, Subcategory } from '../../types';
 import { formatPrice, calculateDiscount } from '../../utils/formatters';
+import { getOptimizedImageUrl } from '../../utils/imageOptimizer';
 import { MarketingBadge } from '../common/Badges';
 
 interface ProductCardProps {
@@ -15,7 +16,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, category, sub
   const [selectedColourIndex, setSelectedColourIndex] = useState(0);
 
   const currentColour = product.colours[selectedColourIndex] || product.colours[0];
-  const displayImage = currentColour?.images[0] || 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=600&q=80';
+  const rawDisplayImage = currentColour?.images[0] || 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=600&q=80';
+  const displayImage = getOptimizedImageUrl(rawDisplayImage, { width: 500 });
   const discount = calculateDiscount(product.mrp, product.sellingPrice);
   const isOutOfStock = product.status === 'OUT_OF_STOCK';
 
@@ -31,6 +33,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, category, sub
           src={displayImage}
           alt={product.name}
           loading="lazy"
+          decoding="async"
           className={`w-full h-full object-cover object-center img-zoom-hover ${
             isOutOfStock ? 'opacity-70 grayscale-30' : ''
           }`}

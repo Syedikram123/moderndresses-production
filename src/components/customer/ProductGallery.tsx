@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Maximize2, X } from 'lucide-react';
 import { ProductColour } from '../../types';
+import { getOptimizedImageUrl } from '../../utils/imageOptimizer';
 
 interface ProductGalleryProps {
   currentColour: ProductColour;
@@ -28,15 +29,18 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({ currentColour, p
     setActiveIndex((prev) => (prev - 1 + images.length) % images.length);
   };
 
+  const mainImageUrl = getOptimizedImageUrl(images[activeIndex], { width: 900 });
+
   return (
     <div className="space-y-4">
       {/* Main Image Container */}
       <div className="relative aspect-[3/4] bg-boutique-100 rounded-2xl overflow-hidden border border-boutique-200/80 shadow-soft group">
         <img
-          src={images[activeIndex]}
+          src={mainImageUrl}
           alt={`${productName} - ${currentColour.name} (View ${activeIndex + 1})`}
           className="w-full h-full object-cover object-center transition-all duration-500"
-          loading="lazy"
+          loading="eager"
+          decoding="async"
         />
 
         {/* Next / Prev Navigation Buttons */}
@@ -94,8 +98,10 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({ currentColour, p
               }`}
             >
               <img
-                src={img}
+                src={getOptimizedImageUrl(img, { width: 160 })}
                 alt={`Thumbnail ${idx + 1}`}
+                loading="lazy"
+                decoding="async"
                 className="w-full h-full object-cover object-center"
               />
             </button>

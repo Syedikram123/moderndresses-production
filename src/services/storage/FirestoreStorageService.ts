@@ -25,6 +25,7 @@ import { runInitialMigrationIfEmpty } from './migrationService';
 import { generateProductId, slugify } from '../../utils/formatters';
 import { LOCAL_STORAGE_SEED } from '../../data/localStorageSeed';
 import { getLocalStorageUsage } from '../../utils/imageCompressor';
+import { getCachedCatalog, setCachedCatalog } from './catalogCache';
 
 /**
  * Production Storage Service for Modern Dresses
@@ -36,19 +37,23 @@ class FirestoreStorageServiceImpl implements IStorageService {
 
   async initialize(): Promise<void> {
     if (this.isInitialized) return;
+    this.isInitialized = true;
 
+    // Fast non-blocking background check for initial migration only if seed flag is not set
     if (isFirebaseConfigured && db) {
-      try {
-        await runInitialMigrationIfEmpty();
-      } catch (err) {
-        console.warn('Initial migration check failed, using existing Firestore data:', err);
+      if (!localStorage.getItem('md_firestore_seeded_flag')) {
+        runInitialMigrationIfEmpty().then((res) => {
+          if (res.success) {
+            localStorage.setItem('md_firestore_seeded_flag', 'true');
+          }
+        }).catch((err) => {
+          console.warn('Background initial migration check:', err);
+        });
       }
     } else {
       // Local development fallback only when Firebase is not configured
       await LocalStorageService.initialize();
     }
-
-    this.isInitialized = true;
   }
 
   async resetDemoData(): Promise<void> {

@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 import { Category } from '../../types';
+import { getOptimizedImageUrl } from '../../utils/imageOptimizer';
 
 interface CategoryCardProps {
   category: Category;
@@ -9,6 +10,8 @@ interface CategoryCardProps {
 }
 
 export const CategoryCard: React.FC<CategoryCardProps> = ({ category, productCount }) => {
+  const optimizedCover = getOptimizedImageUrl(category.coverImage, { width: 400 });
+
   return (
     <Link
       to={`/${category.slug}`}
@@ -16,9 +19,10 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({ category, productCou
     >
       {/* Background Image */}
       <img
-        src={category.coverImage}
+        src={optimizedCover}
         alt={category.name}
         loading="lazy"
+        decoding="async"
         className="w-full h-full object-cover object-center img-zoom-hover"
       />
 
