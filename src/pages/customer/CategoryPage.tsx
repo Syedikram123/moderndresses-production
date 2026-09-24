@@ -6,6 +6,7 @@ import { ProductCard } from '../../components/customer/ProductCard';
 import { FilterBar, FilterState } from '../../components/customer/FilterBar';
 import { Breadcrumbs } from '../../components/common/Breadcrumbs';
 import { getOptimizedImageUrl } from '../../utils/imageOptimizer';
+import { getProductSizePricing, getProductFilterPrice } from '../../utils/productPricing';
 
 export const CategoryPage: React.FC = () => {
   const { categorySlug } = useParams<{ categorySlug: string }>();
@@ -36,7 +37,10 @@ export const CategoryPage: React.FC = () => {
   const availableSizes = useMemo(() => {
     const sizeSet = new Set<string>();
     categoryProducts.forEach((p) => {
-      p.sizes?.forEach((sz) => sizeSet.add(sz));
+      const spList = getProductSizePricing(p);
+      spList.forEach((sp) => {
+        if (sp.size.trim()) sizeSet.add(sp.size.trim());
+      });
     });
     return Array.from(sizeSet).sort();
   }, [categoryProducts]);
@@ -47,16 +51,27 @@ export const CategoryPage: React.FC = () => {
 
     // Price Filter
     if (filters.priceRange === 'UNDER_1500') {
-      list = list.filter((p) => p.showPrice && p.sellingPrice < 1500);
+      list = list.filter((p) => {
+        const price = getProductFilterPrice(p);
+        return price !== null && price < 1500;
+      });
     } else if (filters.priceRange === '1500_2500') {
-      list = list.filter((p) => p.showPrice && p.sellingPrice >= 1500 && p.sellingPrice <= 2500);
+      list = list.filter((p) => {
+        const price = getProductFilterPrice(p);
+        return price !== null && price >= 1500 && price <= 2500;
+      });
     } else if (filters.priceRange === 'ABOVE_2500') {
-      list = list.filter((p) => p.showPrice && p.sellingPrice > 2500);
+      list = list.filter((p) => {
+        const price = getProductFilterPrice(p);
+        return price !== null && price > 2500;
+      });
     }
 
     // Size Filter
     if (filters.selectedSize) {
-      list = list.filter((p) => p.sizes?.includes(filters.selectedSize));
+      list = list.filter((p) =>
+        getProductSizePricing(p).some((sp) => sp.size.toLowerCase() === filters.selectedSize.toLowerCase())
+      );
     }
 
     // In Stock Only
@@ -67,10 +82,10 @@ export const CategoryPage: React.FC = () => {
     // Sorting
     switch (filters.sortBy) {
       case 'PRICE_ASC':
-        list.sort((a, b) => (a.sellingPrice || 0) - (b.sellingPrice || 0));
+        list.sort((a, b) => (getProductFilterPrice(a) ?? Infinity) - (getProductFilterPrice(b) ?? Infinity));
         break;
       case 'PRICE_DESC':
-        list.sort((a, b) => (b.sellingPrice || 0) - (a.sellingPrice || 0));
+        list.sort((a, b) => (getProductFilterPrice(b) ?? -Infinity) - (getProductFilterPrice(a) ?? -Infinity));
         break;
       case 'FEATURED':
         list.sort((a, b) => (b.isFeatured ? 1 : 0) - (a.isFeatured ? 1 : 0));

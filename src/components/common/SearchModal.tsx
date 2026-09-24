@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Search, X, ArrowRight } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { formatPrice } from '../../utils/formatters';
+import { getProductPriceDisplay } from '../../utils/productPricing';
 import { getOptimizedImageUrl } from '../../utils/imageOptimizer';
 
 interface SearchModalProps {
@@ -115,7 +116,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => 
                   <img
                     src={optimizedThumbnail}
                     alt={product.name}
-                    className="w-14 h-18 object-cover rounded-lg bg-boutique-100 flex-shrink-0"
+                    className="w-14 h-18 object-contain rounded-lg bg-boutique-100 flex-shrink-0"
                     loading="lazy"
                     decoding="async"
                   />
@@ -131,15 +132,18 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => 
                     </h4>
                     <p className="text-xs text-charcoal-muted truncate">{product.shortDescription}</p>
                     <div className="mt-1">
-                      {product.showPrice ? (
-                        <span className="text-xs font-bold text-charcoal">
-                          {formatPrice(product.sellingPrice)}
-                        </span>
-                      ) : (
-                        <span className="text-xs italic text-boutique-600">
-                          {product.priceRequestText || 'Price available on request'}
-                        </span>
-                      )}
+                      {(() => {
+                        const priceDisplay = getProductPriceDisplay(product);
+                        return priceDisplay.hasVisiblePrice && priceDisplay.sellingPrice !== null ? (
+                          <span className="text-xs font-bold text-charcoal">
+                            {priceDisplay.isRange ? `From ${formatPrice(priceDisplay.sellingPrice)}` : formatPrice(priceDisplay.sellingPrice)}
+                          </span>
+                        ) : (
+                          <span className="text-xs italic text-boutique-600">
+                            {priceDisplay.displayPriceText || 'Price available on request'}
+                          </span>
+                        );
+                      })()}
                     </div>
                   </div>
                   <ArrowRight className="w-4 h-4 text-boutique-400 group-hover:text-charcoal group-hover:translate-x-1 transition-all" />

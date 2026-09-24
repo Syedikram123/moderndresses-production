@@ -151,7 +151,7 @@ export const AdminDashboard: React.FC = () => {
                         <img
                           src={img}
                           alt={p.name}
-                          className="w-10 h-12 object-cover rounded-lg bg-stone-100 flex-shrink-0"
+                          className="w-10 h-12 object-contain rounded-lg bg-stone-100 flex-shrink-0"
                         />
                         <div>
                           <div className="font-semibold text-charcoal">{p.name}</div>

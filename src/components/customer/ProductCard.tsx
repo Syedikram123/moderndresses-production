@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowUpRight } from 'lucide-react';
 import { Product, Category, Subcategory } from '../../types';
-import { formatPrice, calculateDiscount } from '../../utils/formatters';
+import { formatPrice } from '../../utils/formatters';
+import { getProductPriceDisplay } from '../../utils/productPricing';
 import { getOptimizedImageUrl } from '../../utils/imageOptimizer';
 import { MarketingBadge } from '../common/Badges';
 
@@ -18,7 +19,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, category, sub
   const currentColour = product.colours[selectedColourIndex] || product.colours[0];
   const rawDisplayImage = currentColour?.images[0] || 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=600&q=80';
   const displayImage = getOptimizedImageUrl(rawDisplayImage, { width: 500 });
-  const discount = calculateDiscount(product.mrp, product.sellingPrice);
+  const priceDisplay = getProductPriceDisplay(product);
   const isOutOfStock = product.status === 'OUT_OF_STOCK';
 
   const categorySlug = category?.slug || 'shop';
@@ -34,7 +35,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, category, sub
           alt={product.name}
           loading="lazy"
           decoding="async"
-          className={`w-full h-full object-cover object-center img-zoom-hover ${
+          className={`w-full h-full object-contain object-center img-zoom-hover ${
             isOutOfStock ? 'opacity-70 grayscale-30' : ''
           }`}
         />
@@ -49,8 +50,6 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, category, sub
             <>
               {product.isNewArrival && <MarketingBadge type="new" />}
               {product.isTrending && <MarketingBadge type="trending" />}
-              {product.isFeatured && <MarketingBadge type="featured" />}
-              {product.showPrice && discount > 0 && <MarketingBadge type="discount" value={discount} />}
             </>
           )}
         </div>
@@ -116,22 +115,22 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, category, sub
             )}
           </div>
 
-          {/* Price Display Logic (Requirement 14 & 63) */}
+          {/* Price Display Logic */}
           <div className="text-right">
-            {product.showPrice ? (
+            {priceDisplay.hasVisiblePrice && priceDisplay.sellingPrice !== null ? (
               <div className="flex items-baseline gap-1.5 justify-end">
                 <span className="text-sm sm:text-base font-bold text-charcoal">
-                  {formatPrice(product.sellingPrice)}
+                  {priceDisplay.isRange ? `From ${formatPrice(priceDisplay.sellingPrice)}` : formatPrice(priceDisplay.sellingPrice)}
                 </span>
-                {product.mrp > product.sellingPrice && (
+                {!priceDisplay.isRange && priceDisplay.mrp !== null && priceDisplay.mrp > priceDisplay.sellingPrice && (
                   <span className="text-xs text-charcoal-subtle line-through">
-                    {formatPrice(product.mrp)}
+                    {formatPrice(priceDisplay.mrp)}
                   </span>
                 )}
               </div>
             ) : (
               <span className="text-xs font-serif italic text-gold-700 font-medium">
-                {product.priceRequestText || 'Price on request'}
+                {priceDisplay.displayPriceText || 'Price on request'}
               </span>
             )}
           </div>

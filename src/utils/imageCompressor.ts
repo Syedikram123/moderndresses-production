@@ -8,8 +8,8 @@ export interface ImageCompressionResult {
 
 export function compressImage(
   file: File,
-  maxDimension: number = 900,
-  quality: number = 0.8
+  maxDimension: number = 1600,
+  quality: number = 0.92
 ): Promise<ImageCompressionResult> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -75,8 +75,8 @@ export interface CompressedWebPResult {
 
 export function compressImageToWebP(
   file: File,
-  maxDimension: number = 900,
-  quality: number = 0.82
+  maxDimension: number = 1600,
+  quality: number = 0.92
 ): Promise<CompressedWebPResult> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();

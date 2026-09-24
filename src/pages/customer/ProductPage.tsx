@@ -7,7 +7,8 @@ import { ProductCard } from '../../components/customer/ProductCard';
 import { Breadcrumbs } from '../../components/common/Breadcrumbs';
 import { ShareModal } from '../../components/customer/ShareModal';
 import { StickyWhatsAppCTA } from '../../components/customer/StickyWhatsAppCTA';
-import { formatPrice, calculateDiscount } from '../../utils/formatters';
+import { formatPrice } from '../../utils/formatters';
+import { getProductSizePricing, getProductPriceDisplay } from '../../utils/productPricing';
 import { generateWhatsAppUrl } from '../../utils/whatsapp';
 import { recordWhatsAppClick } from '../../utils/whatsappAnalytics';
 import { MarketingBadge } from '../../components/common/Badges';
@@ -47,6 +48,16 @@ export const ProductPage: React.FC = () => {
   const isHidden = product?.status === 'HIDDEN';
   const isOutOfStock = product?.status === 'OUT_OF_STOCK';
 
+  // Dynamic Size Pricing resolution
+  const sizePricingList = useMemo(() => {
+    return product ? getProductSizePricing(product) : [];
+  }, [product]);
+
+  // Current price display based on selected size
+  const priceDisplay = useMemo(() => {
+    return getProductPriceDisplay(product, selectedSize);
+  }, [product, selectedSize]);
+
   // Selected colour
   const currentColour = product?.colours[selectedColourIndex] || product?.colours[0] || {
     id: 'default',
@@ -56,10 +67,10 @@ export const ProductPage: React.FC = () => {
 
   // Set default size once product is loaded
   React.useEffect(() => {
-    if (product?.sizes?.length && !selectedSize) {
-      setSelectedSize(product.sizes[0]);
+    if (sizePricingList.length > 0 && (!selectedSize || !sizePricingList.some((sp) => sp.size === selectedSize))) {
+      setSelectedSize(sizePricingList[0].size);
     }
-  }, [product, selectedSize]);
+  }, [sizePricingList, selectedSize]);
 
   // Current URL for sharing & WhatsApp
   const currentUrl = typeof window !== 'undefined' ? window.location.href : `https://moderndresses.com/${categorySlug}/${subcategorySlug}/${productSlug}`;
@@ -73,21 +84,21 @@ export const ProductPage: React.FC = () => {
       selectedSize,
       currentUrl,
       whatsappNumber: storeSettings?.whatsappNumber || '7204919857',
-      isPriceHidden: !product.showPrice,
+      isPriceHidden: !priceDisplay.hasVisiblePrice,
       isOutOfStock,
     });
-  }, [product, currentColour.name, selectedSize, currentUrl, storeSettings?.whatsappNumber, isOutOfStock]);
+  }, [product, currentColour.name, selectedSize, currentUrl, storeSettings?.whatsappNumber, priceDisplay.hasVisiblePrice, isOutOfStock]);
 
   // WhatsApp Button Label
   const whatsappButtonText = useMemo(() => {
     if (isOutOfStock) {
       return storeSettings?.whatsappOutOfStockCtaText || 'ASK IF AVAILABLE';
     }
-    if (!product?.showPrice) {
+    if (!priceDisplay.hasVisiblePrice) {
       return storeSettings?.whatsappPriceHiddenCtaText || 'ASK FOR PRICE ON WHATSAPP';
     }
     return storeSettings?.whatsappCtaText || 'ORDER THROUGH WHATSAPP';
-  }, [isOutOfStock, product?.showPrice, storeSettings]);
+  }, [isOutOfStock, priceDisplay.hasVisiblePrice, storeSettings]);
 
   // Record WhatsApp click event
   const handleWhatsAppClick = () => {
@@ -165,8 +176,6 @@ export const ProductPage: React.FC = () => {
     );
   }
 
-  const discount = calculateDiscount(product.mrp, product.sellingPrice);
-
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-2 pb-24 space-y-12">
       {/* Breadcrumbs */}
@@ -196,7 +205,7 @@ export const ProductPage: React.FC = () => {
               >
                 {subcategory.name}
               </Link>
-               </div>
+            </div>
 
             <div className="flex items-center gap-1.5">
               {product.isNewArrival && <MarketingBadge type="new" />}
@@ -217,36 +226,38 @@ export const ProductPage: React.FC = () => {
             </p>
           )}
 
-          {/* Price Engine (Requirement 14, 63) */}
+          {/* Price Engine */}
           <div className="py-4 border-y border-boutique-200">
-            {product.showPrice ? (
+            {priceDisplay.hasVisiblePrice && priceDisplay.sellingPrice !== null ? (
               <div className="space-y-1">
                 <div className="flex items-baseline gap-3">
                   <span className="text-2xl sm:text-3xl font-bold text-charcoal">
-                    {formatPrice(product.sellingPrice)}
+                    {formatPrice(priceDisplay.sellingPrice)}
                   </span>
-                  {product.mrp > product.sellingPrice && (
+                  {priceDisplay.mrp !== null && priceDisplay.mrp > priceDisplay.sellingPrice && (
                     <>
                       <span className="text-sm sm:text-base text-charcoal-subtle line-through">
-                        MRP {formatPrice(product.mrp)}
+                        MRP {formatPrice(priceDisplay.mrp)}
                       </span>
-                      <span className="px-2 py-0.5 text-xs font-bold text-rose-700 bg-rose-50 rounded">
-                        {discount}% OFF
-                      </span>
+                      {product.showDiscountBadge !== false && priceDisplay.discount > 0 && (
+                        <span className="px-2 py-0.5 text-xs font-bold text-rose-700 bg-rose-50 rounded">
+                          {priceDisplay.discount}% OFF
+                        </span>
+                      )}
                     </>
                   )}
                 </div>
                 <p className="text-[11px] text-charcoal-subtle">Inclusive of all local taxes</p>
               </div>
             ) : (
-             <div className="space-y-1">
-  <div className="text-base sm:text-lg font-sans font-medium text-charcoal">
-    {product.priceRequestText || 'Price available on request'}
-  </div>
-  <p className="text-xs text-charcoal-muted">
-    Connect directly with our store through WhatsApp for current pricing, discounts & availability.
-  </p>
-</div>
+              <div className="space-y-1">
+                <div className="text-base sm:text-lg font-sans font-medium text-charcoal">
+                  {priceDisplay.displayPriceText || 'Price available on request'}
+                </div>
+                <p className="text-xs text-charcoal-muted">
+                  Connect directly with our store through WhatsApp for current pricing, discounts & availability.
+                </p>
+              </div>
             )}
           </div>
 
@@ -258,7 +269,7 @@ export const ProductPage: React.FC = () => {
             </div>
           )}
 
-          {/* Colour Swatches Selector (Requirement 18) */}
+          {/* Colour Swatches Selector */}
           {product.colours.length > 0 && (
             <div className="space-y-2.5">
               <label className="block text-xs font-bold uppercase tracking-widest text-charcoal">
@@ -287,8 +298,8 @@ export const ProductPage: React.FC = () => {
             </div>
           )}
 
-          {/* Size Selector (Requirement 20) */}
-          {product.sizes && product.sizes.length > 0 && (
+          {/* Size Selector */}
+          {sizePricingList.length > 0 && (
             <div className="space-y-2.5">
               <div className="flex items-center justify-between">
                 <label className="block text-xs font-bold uppercase tracking-widest text-charcoal">
@@ -296,18 +307,18 @@ export const ProductPage: React.FC = () => {
                 </label>
               </div>
               <div className="flex flex-wrap gap-2">
-                {product.sizes.map((sz) => (
+                {sizePricingList.map((sp) => (
                   <button
-                    key={sz}
+                    key={sp.size}
                     type="button"
-                    onClick={() => setSelectedSize(sz)}
+                    onClick={() => setSelectedSize(sp.size)}
                     className={`min-w-[48px] h-10 px-3.5 rounded-xl border text-xs font-semibold uppercase tracking-wider transition-all ${
-                      selectedSize === sz
+                      selectedSize === sp.size
                         ? 'border-charcoal bg-charcoal text-white shadow-sm'
                         : 'border-boutique-300 bg-white text-charcoal hover:border-charcoal'
                     }`}
                   >
-                    {sz}
+                    {sp.size}
                   </button>
                 ))}
               </div>
@@ -546,7 +557,11 @@ export const ProductPage: React.FC = () => {
       <StickyWhatsAppCTA
         whatsappUrl={whatsappUrl}
         ctaText={whatsappButtonText}
-        subtitle={product.showPrice ? formatPrice(product.sellingPrice) : 'Price on request'}
+        subtitle={
+          priceDisplay.hasVisiblePrice && priceDisplay.sellingPrice !== null
+            ? formatPrice(priceDisplay.sellingPrice)
+            : (priceDisplay.displayPriceText || 'Price on request')
+        }
         onWhatsAppClick={handleWhatsAppClick}
       />
     </div>

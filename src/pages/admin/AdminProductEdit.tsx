@@ -13,8 +13,9 @@ import {
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { storageService } from '../../services/storage';
-import { Product, ProductColour, ProductStatus } from '../../types';
+import { Product, ProductColour, ProductStatus, ProductSizePrice } from '../../types';
 import { slugify, calculateDiscount } from '../../utils/formatters';
+import { getProductSizePricing } from '../../utils/productPricing';
 import { compressImage, compressImageToWebP } from '../../utils/imageCompressor';
 import { cloudinaryMediaService } from '../../services/storage/CloudinaryMediaService';
 
@@ -30,9 +31,6 @@ const PRESET_TAGS = [
   'Summer',
   'Exclusive',
 ];
-
-const STANDARD_ADULT_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'];
-const STANDARD_KIDS_SIZES = ['20', '22', '24', '26', '28', '30', '32'];
 
 export const AdminProductEdit: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -51,12 +49,6 @@ export const AdminProductEdit: React.FC = () => {
   const [shortDescription, setShortDescription] = useState('');
   const [description, setDescription] = useState('');
 
-  // Pricing & Price Visibility Engine (Requirements #13 & #14)
-  const [mrp, setMrp] = useState<number>(1999);
-  const [sellingPrice, setSellingPrice] = useState<number>(1499);
-  const [showPrice, setShowPrice] = useState<boolean>(true);
-  const [priceRequestText, setPriceRequestText] = useState('Price available on request');
-
   // Status & Marketing
   const [status, setStatus] = useState<ProductStatus>('ACTIVE');
   const [isFeatured, setIsFeatured] = useState<boolean>(false);
@@ -74,10 +66,10 @@ export const AdminProductEdit: React.FC = () => {
   const [washCare, setWashCare] = useState('');
   const [countryOfOrigin, setCountryOfOrigin] = useState('India');
 
-  // Tags & Sizes
+  // Dynamic Size Pricing & Tags
+  const [sizePricing, setSizePricing] = useState<ProductSizePrice[]>([]);
+  const [showDiscountBadge, setShowDiscountBadge] = useState<boolean>(true);
   const [tags, setTags] = useState<string[]>([]);
-  const [sizes, setSizes] = useState<string[]>([]);
-  const [customSizeInput, setCustomSizeInput] = useState('');
 
   // Multi-Colour System (Requirements #18 & #50: Max 5 photos per colour)
   const [colours, setColours] = useState<ProductColour[]>([
@@ -105,10 +97,6 @@ export const AdminProductEdit: React.FC = () => {
           setSubcategoryId(prod.subcategoryId);
           setShortDescription(prod.shortDescription || '');
           setDescription(prod.description || '');
-          setMrp(prod.mrp || 0);
-          setSellingPrice(prod.sellingPrice || 0);
-          setShowPrice(prod.showPrice !== false);
-          setPriceRequestText(prod.priceRequestText || 'Price available on request');
           setStatus(prod.status);
           setIsFeatured(Boolean(prod.isFeatured));
           setIsNewArrival(Boolean(prod.isNewArrival));
@@ -123,7 +111,8 @@ export const AdminProductEdit: React.FC = () => {
           setWashCare(prod.washCare || '');
           setCountryOfOrigin(prod.countryOfOrigin || 'India');
           setTags(prod.tags || []);
-          setSizes(prod.sizes || []);
+          setShowDiscountBadge(prod.showDiscountBadge !== false);
+          setSizePricing(getProductSizePricing(prod));
           setColours(
             prod.colours?.length
               ? prod.colours
@@ -171,21 +160,31 @@ export const AdminProductEdit: React.FC = () => {
     }
   };
 
-  // Size toggling
-  const toggleSize = (sz: string) => {
-    if (sizes.includes(sz)) {
-      setSizes(sizes.filter((s) => s !== sz));
-    } else {
-      setSizes([...sizes, sz]);
-    }
+  // Dynamic Size Pricing Handlers
+  const handleAddSize = () => {
+    const newEntry: ProductSizePrice = {
+      size: '',
+      mrp: 0,
+      sellingPrice: 0,
+      showPrice: true,
+      contactPriceMessage: 'Price available on request',
+    };
+    setSizePricing((prev) => [...prev, newEntry]);
   };
 
-  const handleAddCustomSize = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (customSizeInput.trim() && !sizes.includes(customSizeInput.trim())) {
-      setSizes([...sizes, customSizeInput.trim()]);
-      setCustomSizeInput('');
-    }
+  const handleUpdateSize = (index: number, field: keyof ProductSizePrice, value: any) => {
+    setSizePricing((prev) =>
+      prev.map((item, idx) => {
+        if (idx === index) {
+          return { ...item, [field]: value };
+        }
+        return item;
+      })
+    );
+  };
+
+  const handleRemoveSize = (index: number) => {
+    setSizePricing((prev) => prev.filter((_, idx) => idx !== index));
   };
 
   // Colour Handlers
@@ -239,14 +238,14 @@ export const AdminProductEdit: React.FC = () => {
       const targetProductId = id || `temp_${Date.now()}`;
 
       if (cloudinaryMediaService.isConfigured()) {
-        const webpResult = await compressImageToWebP(file, 900, 0.82);
+        const webpResult = await compressImageToWebP(file, 1600, 0.92);
         finalImageUrl = await cloudinaryMediaService.uploadProductImage(
           targetProductId,
           colourId,
           webpResult.blob
         );
       } else {
-        const result = await compressImage(file, 900, 0.8);
+        const result = await compressImage(file, 1600, 0.92);
         finalImageUrl = result.dataUrl;
       }
 
@@ -315,10 +314,42 @@ export const AdminProductEdit: React.FC = () => {
       return;
     }
 
+    // Size Validation
+    for (let i = 0; i < sizePricing.length; i++) {
+      const item = sizePricing[i];
+      if (!item.size.trim()) {
+        setError(`Size name cannot be empty (Row #${i + 1})`);
+        return;
+      }
+      if (item.mrp < 0 || item.sellingPrice < 0) {
+        setError(`MRP and Selling Price cannot be negative (Row #${i + 1}: ${item.size})`);
+        return;
+      }
+    }
+
+    // Check for duplicate size names
+    const sizeNames = sizePricing.map((s) => s.size.trim().toLowerCase());
+    const hasDuplicates = sizeNames.some((szName, idx) => sizeNames.indexOf(szName) !== idx);
+    if (hasDuplicates) {
+      setError('Duplicate size names are not allowed. Please ensure each size is unique.');
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
     try {
+      const cleanSizePricing: ProductSizePrice[] = sizePricing.map((sp) => ({
+        size: sp.size.trim(),
+        mrp: Number(sp.mrp) || 0,
+        sellingPrice: Number(sp.sellingPrice) || 0,
+        showPrice: Boolean(sp.showPrice),
+        contactPriceMessage: (sp.contactPriceMessage || 'Price available on request').trim(),
+      }));
+
+      const derivedSizes = cleanSizePricing.map((sp) => sp.size);
+      const firstVisible = cleanSizePricing.find((sp) => sp.showPrice) || cleanSizePricing[0];
+
       const productPayload = {
         categoryId,
         subcategoryId,
@@ -326,10 +357,13 @@ export const AdminProductEdit: React.FC = () => {
         slug: slugify(slug || name),
         description: description.trim(),
         shortDescription: shortDescription.trim(),
-        mrp: Number(mrp) || 0,
-        sellingPrice: Number(sellingPrice) || 0,
-        showPrice,
-        priceRequestText: priceRequestText.trim(),
+        sizePricing: cleanSizePricing,
+        showDiscountBadge,
+        // Legacy fallback fields for backward compatibility
+        mrp: firstVisible ? firstVisible.mrp : 0,
+        sellingPrice: firstVisible ? firstVisible.sellingPrice : 0,
+        showPrice: cleanSizePricing.length > 0 ? cleanSizePricing.some((sp) => sp.showPrice) : true,
+        priceRequestText: firstVisible?.contactPriceMessage || 'Price available on request',
         status,
         isFeatured,
         isNewArrival,
@@ -344,7 +378,7 @@ export const AdminProductEdit: React.FC = () => {
         washCare: washCare.trim(),
         countryOfOrigin: countryOfOrigin.trim(),
         tags,
-        sizes,
+        sizes: derivedSizes,
         colours,
       };
 
@@ -364,8 +398,6 @@ export const AdminProductEdit: React.FC = () => {
     }
   };
 
-  const discount = calculateDiscount(mrp, sellingPrice);
-
   return (
     <div className="space-y-6 pb-20">
       {/* Header Bar */}
@@ -381,7 +413,6 @@ export const AdminProductEdit: React.FC = () => {
             <h1 className="font-editorial text-2xl sm:text-3xl font-bold text-charcoal">
               {isEditing ? `Edit Product: ${name || id}` : 'Create New Product'}
             </h1>
-            
           </div>
         </div>
 
@@ -513,106 +544,7 @@ export const AdminProductEdit: React.FC = () => {
           </div>
         </div>
 
-        {/* SECTION 2: PRICING & PRICE VISIBILITY (Requirements #14, #63) */}
-        <div className="bg-white p-6 rounded-3xl border border-stone-200 shadow-soft space-y-4">
-          <div className="flex items-center justify-between pb-2 border-b border-stone-100">
-            <div>
-              <h2 className="font-editorial text-lg font-bold text-charcoal">
-                Pricing & Price Visibility Controls
-              </h2>
-              <p className="text-xs text-charcoal-muted">
-                Control whether the customer see the price of custom text
-              </p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-charcoal mb-1">
-                MRP (₹)
-              </label>
-              <input
-                type="number"
-                value={mrp}
-                onChange={(e) => setMrp(Number(e.target.value))}
-                className="w-full text-xs bg-stone-50 border border-stone-200 rounded-xl px-3.5 py-2.5 text-charcoal focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-charcoal mb-1">
-                Selling Price (₹)
-              </label>
-              <input
-                type="number"
-                value={sellingPrice}
-                onChange={(e) => setSellingPrice(Number(e.target.value))}
-                className="w-full text-xs bg-stone-50 border border-stone-200 rounded-xl px-3.5 py-2.5 text-charcoal focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-charcoal mb-1">
-                Calculated Discount
-              </label>
-              <div className="w-full text-xs bg-stone-100 border border-stone-200 rounded-xl px-3.5 py-2.5 font-bold text-emerald-800">
-                {discount > 0 ? `${discount}% OFF` : 'No Discount'}
-              </div>
-            </div>
-          </div>
-
-          {/* Core Price Visibility Toggle */}
-          <div className="pt-3 border-t border-stone-100 space-y-3">
-            <label className="block text-xs font-bold uppercase tracking-wider text-charcoal">
-              Price Display Mode on Customer Store
-            </label>
-            <div className="flex flex-wrap gap-4">
-              <label className="flex items-center gap-2 p-3 bg-stone-50 rounded-xl border border-stone-200 cursor-pointer text-xs">
-                <input
-                  type="radio"
-                  name="priceVisibility"
-                  checked={showPrice === true}
-                  onChange={() => setShowPrice(true)}
-                  className="text-charcoal focus:ring-charcoal"
-                />
-                <span className="font-semibold text-charcoal">Show Price (e.g. ₹{sellingPrice})</span>
-              </label>
-
-              <label className="flex items-center gap-2 p-3 bg-stone-50 rounded-xl border border-stone-200 cursor-pointer text-xs">
-                <input
-                  type="radio"
-                  name="priceVisibility"
-                  checked={showPrice === false}
-                  onChange={() => setShowPrice(false)}
-                  className="text-charcoal focus:ring-charcoal"
-                />
-                <span className="font-semibold text-gold-700">
-                  Hide Price
-                </span>
-              </label>
-            </div>
-
-            {!showPrice && (
-              <div className="pt-2">
-                <label className="block text-xs font-bold uppercase tracking-wider text-charcoal mb-1">
-                  Custom Contact Price Message
-                </label>
-                <input
-                  type="text"
-                  value={priceRequestText}
-                  onChange={(e) => setPriceRequestText(e.target.value)}
-                  placeholder="Price available on request"
-                  className="w-full sm:max-w-md text-xs bg-amber-50/60 border border-amber-200 rounded-xl px-3.5 py-2.5 text-charcoal focus:outline-none"
-                />
-                <p className="text-[11px] text-charcoal-muted mt-1">
-                  This text will replace the price in product cards and product pages.
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* SECTION 3: PRODUCT STATUS & MARKETING */}
+        {/* SECTION 2: PRODUCT STATUS & MARKETING */}
         <div className="bg-white p-6 rounded-3xl border border-stone-200 shadow-soft space-y-4">
           <h2 className="font-editorial text-lg font-bold text-charcoal pb-2 border-b border-stone-100">
             Status & Marketing Badges
@@ -660,129 +592,196 @@ export const AdminProductEdit: React.FC = () => {
           </div>
         </div>
 
-        {/* SECTION 4: SIZES & TAGS (Requirements #20 & #28) */}
-        <div className="bg-white p-6 rounded-3xl border border-stone-200 shadow-soft space-y-5">
-          <h2 className="font-editorial text-lg font-bold text-charcoal pb-2 border-b border-stone-100">
-            Available Sizes & Tags
-          </h2>
-
-          {/* Sizes */}
-          <div className="space-y-2">
-            <label className="block text-xs font-bold uppercase tracking-wider text-charcoal">
-              Available Sizes
-            </label>
-            <div className="space-y-2">
-              <div className="text-[11px] text-charcoal-muted">Standard Adult Sizes:</div>
-              <div className="flex flex-wrap gap-2">
-                {STANDARD_ADULT_SIZES.map((sz) => (
-                  <button
-                    key={sz}
-                    type="button"
-                    onClick={() => toggleSize(sz)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold uppercase border transition-all ${
-                      sizes.includes(sz)
-                        ? 'bg-charcoal text-white border-charcoal'
-                        : 'bg-stone-50 text-charcoal border-stone-200 hover:border-stone-400'
-                    }`}
-                  >
-                    {sz}
-                  </button>
-                ))}
-              </div>
-
-              <div className="text-[11px] text-charcoal-muted pt-1">Kids / Custom Sizes:</div>
-              <div className="flex flex-wrap gap-2">
-                {STANDARD_KIDS_SIZES.map((sz) => (
-                  <button
-                    key={sz}
-                    type="button"
-                    onClick={() => toggleSize(sz)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold uppercase border transition-all ${
-                      sizes.includes(sz)
-                        ? 'bg-charcoal text-white border-charcoal'
-                        : 'bg-stone-50 text-charcoal border-stone-200 hover:border-stone-400'
-                    }`}
-                  >
-                    {sz}
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  onClick={() => toggleSize('Free Size')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold uppercase border transition-all ${
-                    sizes.includes('Free Size')
-                      ? 'bg-charcoal text-white border-charcoal'
-                      : 'bg-stone-50 text-charcoal border-stone-200 hover:border-stone-400'
-                  }`}
-                >
-                  Free Size
-                </button>
-              </div>
-
-                            {/* Custom Sizes */}
-              <div className="pt-2 space-y-2">
-                <div className="text-[11px] text-charcoal-muted">
-                  Custom Sizes:
-                </div>
-
-                {/* Added custom sizes */}
-                {sizes.filter(
-                  (sz) =>
-                    !STANDARD_ADULT_SIZES.includes(sz) &&
-                    !STANDARD_KIDS_SIZES.includes(sz) &&
-                    sz !== 'Free Size'
-                ).length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {sizes
-                      .filter(
-                        (sz) =>
-                          !STANDARD_ADULT_SIZES.includes(sz) &&
-                          !STANDARD_KIDS_SIZES.includes(sz) &&
-                          sz !== 'Free Size'
-                      )
-                      .map((sz) => (
-                        <button
-                          key={sz}
-                          type="button"
-                          onClick={() => toggleSize(sz)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold uppercase border transition-all ${
-                            sizes.includes(sz)
-                              ? 'bg-charcoal text-white border-charcoal'
-                              : 'bg-stone-50 text-charcoal border-stone-200 hover:border-stone-400'
-                          }`}
-                        >
-                          {sz}
-                        </button>
-                      ))}
-                  </div>
-                )}
-
-                {/* Add New Custom Size */}
-                <div className="flex items-center gap-2 max-w-xs">
-                  <input
-                    type="text"
-                    value={customSizeInput}
-                    onChange={(e) => setCustomSizeInput(e.target.value)}
-                    placeholder="Custom size (e.g. 34 or 2-3Y)"
-                    className="w-full text-xs bg-stone-50 border border-stone-200 rounded-lg px-3 py-1.5 text-charcoal focus:outline-none"
-                  />
-
-                  <button
-                    type="button"
-                    onClick={handleAddCustomSize}
-                    className="px-3 py-1.5 bg-stone-800 text-white rounded-lg text-xs font-semibold uppercase flex-shrink-0"
-                  >
-                    Add
-                  </button>
-                </div>
-              </div>
+        {/* SECTION 3: AVAILABLE SIZES, PRICING & TAGS */}
+        <div className="bg-white p-6 rounded-3xl border border-stone-200 shadow-soft space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-stone-100">
+            <div>
+              <h2 className="font-editorial text-lg font-bold text-charcoal">
+                Sizes, Pricing & Discount
+              </h2>
+             
             </div>
+
+            <button
+              type="button"
+              onClick={handleAddSize}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-charcoal hover:bg-gold-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-colors self-start sm:self-auto shadow-sm"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Size</span>
+            </button>
           </div>
 
-          {/* Tags */}
+          {/* Product-level Discount Badge Toggle */}
+          <div className="flex items-center gap-2.5 p-3.5 bg-stone-50 rounded-2xl border border-stone-200">
+            <input
+              type="checkbox"
+              id="showDiscountBadge"
+              checked={showDiscountBadge}
+              onChange={(e) => setShowDiscountBadge(e.target.checked)}
+              className="rounded text-charcoal focus:ring-charcoal w-4 h-4"
+            />
+            <label htmlFor="showDiscountBadge" className="text-xs font-semibold text-charcoal cursor-pointer">
+              Show discount percentage on store
+              
+            </label>
+          </div>
 
-          {/* Tags */}
-          <div className="space-y-2 pt-3 border-t border-stone-100">
+          {/* Size Pricing Rows */}
+          <div className="space-y-3">
+            {sizePricing.length === 0 ? (
+              <div className="p-8 text-center bg-stone-50 rounded-2xl border border-dashed border-stone-200">
+                <p className="text-xs font-medium text-stone-600 mb-2">No sizes added for this product yet.</p>
+                <p className="text-[11px] text-stone-400 mb-4">Click below to add sizes (e.g. S, M, L, XL, Free Size, 32, 2-3Y) with specific pricing.</p>
+                <button
+                  type="button"
+                  onClick={handleAddSize}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-stone-800 hover:bg-stone-900 text-white rounded-xl text-xs font-semibold transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Size</span>
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {sizePricing.map((item, index) => {
+                  const sizeDiscount = item.mrp > item.sellingPrice && item.mrp > 0
+                    ? calculateDiscount(item.mrp, item.sellingPrice)
+                    : 0;
+
+                  return (
+                    <div
+                      key={index}
+                      className="p-4 bg-stone-50/70 hover:bg-stone-50 border border-stone-200 rounded-2xl transition-all space-y-3"
+                    >
+                      <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-start">
+                        {/* Size Name */}
+                        <div className="sm:col-span-3">
+                          <label className="block text-[11px] font-bold uppercase tracking-wider text-charcoal mb-1">
+                            Size *
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            value={item.size}
+                            onChange={(e) => handleUpdateSize(index, 'size', e.target.value)}
+                            placeholder="e.g. S, M, XL, Free Size, 34"
+                            className="w-full text-xs font-medium bg-white border border-stone-200 rounded-xl px-3 py-2 text-charcoal focus:outline-none focus:ring-1 focus:ring-charcoal"
+                          />
+                        </div>
+
+                        {/* MRP */}
+                        <div className="sm:col-span-2">
+                          <label className="block text-[11px] font-bold uppercase tracking-wider text-charcoal mb-1">
+                            MRP (₹)
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            value={item.mrp || ''}
+                            onChange={(e) => handleUpdateSize(index, 'mrp', Number(e.target.value))}
+                            placeholder="0"
+                            className="w-full text-xs bg-white border border-stone-200 rounded-xl px-3 py-2 text-charcoal focus:outline-none focus:ring-1 focus:ring-charcoal"
+                          />
+                        </div>
+
+                        {/* Selling Price */}
+                        <div className="sm:col-span-2">
+                          <label className="block text-[11px] font-bold uppercase tracking-wider text-charcoal mb-1">
+                            Selling Price (₹)
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            value={item.sellingPrice || ''}
+                            onChange={(e) => handleUpdateSize(index, 'sellingPrice', Number(e.target.value))}
+                            placeholder="0"
+                            className="w-full text-xs font-semibold bg-white border border-stone-200 rounded-xl px-3 py-2 text-charcoal focus:outline-none focus:ring-1 focus:ring-charcoal"
+                          />
+                        </div>
+
+                        {/* Discount Display */}
+                        <div className="sm:col-span-2">
+                          <label className="block text-[11px] font-bold uppercase tracking-wider text-charcoal mb-1">
+                            Discount
+                          </label>
+                          <div className="w-full text-xs bg-stone-100 border border-stone-200 rounded-xl px-3 py-2 font-bold text-center">
+                            {item.showPrice && sizeDiscount > 0 ? (
+                              <span className="text-emerald-700">{sizeDiscount}% OFF</span>
+                            ) : (
+                              <span className="text-stone-400">—</span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Price Visibility Controls */}
+                        <div className="sm:col-span-2">
+                          <label className="block text-[11px] font-bold uppercase tracking-wider text-charcoal mb-1">
+                            Price Visibility
+                          </label>
+                          <div className="flex items-center gap-1.5 pt-1">
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateSize(index, 'showPrice', true)}
+                              className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all ${
+                                item.showPrice
+                                  ? 'bg-emerald-600 text-white shadow-sm'
+                                  : 'bg-white text-stone-600 border border-stone-200 hover:bg-stone-100'
+                              }`}
+                            >
+                              Show
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateSize(index, 'showPrice', false)}
+                              className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all ${
+                                !item.showPrice
+                                  ? 'bg-amber-600 text-white shadow-sm'
+                                  : 'bg-white text-stone-600 border border-stone-200 hover:bg-stone-100'
+                              }`}
+                            >
+                              Hide
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Delete Row */}
+                        <div className="sm:col-span-1 flex sm:justify-center sm:pt-6">
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveSize(index)}
+                            title="Remove Size"
+                            className="p-2 text-stone-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Custom Contact Price Message (if price is hidden) */}
+                      {!item.showPrice && (
+                        <div className="pt-2 border-t border-stone-200/60 flex flex-col sm:flex-row sm:items-center gap-2">
+                          <label className="text-[11px] font-bold uppercase tracking-wider text-amber-900 flex-shrink-0">
+                            Custom Price Message:
+                          </label>
+                          <input
+                            type="text"
+                            value={item.contactPriceMessage || ''}
+                            onChange={(e) => handleUpdateSize(index, 'contactPriceMessage', e.target.value)}
+                            placeholder="Price available on request"
+                            className="flex-1 text-xs bg-amber-50/70 border border-amber-200 rounded-xl px-3 py-1.5 text-charcoal focus:outline-none"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Marketing Tags */}
+        {/*}  <div className="space-y-2 pt-4 border-t border-stone-100">
             <label className="block text-xs font-bold uppercase tracking-wider text-charcoal">
               Marketing Tags
             </label>
@@ -802,8 +801,8 @@ export const AdminProductEdit: React.FC = () => {
                 </button>
               ))}
             </div>
-          </div>
-        </div>
+          </div> */}
+        </div>   
 
         {/* SECTION 5: MULTI-COLOUR & PHOTOS SYSTEM (Requirements #18 & #50) */}
         <div className="bg-white p-6 rounded-3xl border border-stone-200 shadow-soft space-y-6">
@@ -812,9 +811,7 @@ export const AdminProductEdit: React.FC = () => {
               <h2 className="font-editorial text-lg font-bold text-charcoal">
                 Colour Variants & Image Galleries
               </h2>
-              <p className="text-xs text-charcoal-muted">
-                Add colours with names, hex codes, and up to 5 photos per colour (compressed automatically)
-              </p>
+              
             </div>
 
             <button
@@ -823,7 +820,7 @@ export const AdminProductEdit: React.FC = () => {
               className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-stone-100 hover:bg-stone-200 text-charcoal rounded-xl text-xs font-semibold uppercase tracking-wider transition-colors self-start sm:self-auto"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>+ Add Colour</span>
+              <span>Add Colour</span>
             </button>
           </div>
 
@@ -884,7 +881,7 @@ export const AdminProductEdit: React.FC = () => {
                         <img
                           src={imgUrl}
                           alt={`${col.name} photo ${imgIdx + 1}`}
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-contain"
                         />
                         <button
                           type="button"

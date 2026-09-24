@@ -38,7 +38,7 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({ currentColour, p
         <img
           src={mainImageUrl}
           alt={`${productName} - ${currentColour.name} (View ${activeIndex + 1})`}
-          className="w-full h-full object-cover object-center transition-all duration-500"
+          className="w-full h-full object-contain object-center transition-all duration-500"
           loading="eager"
           decoding="async"
         />
@@ -102,7 +102,7 @@ export const ProductGallery: React.FC<ProductGalleryProps> = ({ currentColour, p
                 alt={`Thumbnail ${idx + 1}`}
                 loading="lazy"
                 decoding="async"
-                className="w-full h-full object-cover object-center"
+                className="w-full h-full object-contain object-center"
               />
             </button>
           ))}

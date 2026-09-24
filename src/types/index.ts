@@ -32,6 +32,14 @@ export interface Subcategory {
   updatedAt: string;
 }
 
+export interface ProductSizePrice {
+  size: string;
+  mrp: number;
+  sellingPrice: number;
+  showPrice: boolean;
+  contactPriceMessage?: string; // e.g. "Price available on request"
+}
+
 export interface Product {
   id: string; // e.g. MD-GIRLS-FROCK-0012
   categoryId: string;
@@ -41,10 +49,14 @@ export interface Product {
   description: string;
   shortDescription: string;
 
-  // Pricing
-  mrp: number;
-  sellingPrice: number;
-  showPrice: boolean;
+  // Size-Specific Pricing Architecture
+  sizePricing?: ProductSizePrice[];
+  showDiscountBadge?: boolean; // Default true (product-level discount badge toggle)
+
+  // Legacy Pricing (Maintained for backward compatibility)
+  mrp?: number;
+  sellingPrice?: number;
+  showPrice?: boolean;
   priceRequestText?: string; // e.g. "Price available on request"
 
   // Status & Flags

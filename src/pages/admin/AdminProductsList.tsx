@@ -16,6 +16,7 @@ import { useStore } from '../../context/StoreContext';
 import { storageService } from '../../services/storage';
 import { Product } from '../../types';
 import { formatPrice } from '../../utils/formatters';
+import { getProductPriceDisplay } from '../../utils/productPricing';
 import { StatusBadge } from '../../components/common/Badges';
 
 export const AdminProductsList: React.FC = () => {
@@ -261,7 +262,7 @@ export const AdminProductsList: React.FC = () => {
                           <img
                             src={firstImg}
                             alt={p.name}
-                            className="w-12 h-16 object-cover rounded-lg bg-stone-100 flex-shrink-0"
+                            className="w-12 h-16 object-contain rounded-lg bg-stone-100 flex-shrink-0"
                             loading="lazy"
                           />
                           <div className="max-w-xs">
@@ -282,28 +283,33 @@ export const AdminProductsList: React.FC = () => {
 
                       {/* Pricing & Visibility */}
                       <td className="py-3.5 px-4">
-                        {p.showPrice ? (
-                          <div>
-                            <div className="font-bold text-charcoal">{formatPrice(p.sellingPrice)}</div>
-                            {p.mrp > p.sellingPrice && (
-                              <div className="text-[10px] text-charcoal-subtle line-through">
-                                {formatPrice(p.mrp)}
+                        {(() => {
+                          const priceDisplay = getProductPriceDisplay(p);
+                          return priceDisplay.hasVisiblePrice && priceDisplay.sellingPrice !== null ? (
+                            <div>
+                              <div className="font-bold text-charcoal">
+                                {priceDisplay.isRange ? `From ${formatPrice(priceDisplay.sellingPrice)}` : formatPrice(priceDisplay.sellingPrice)}
                               </div>
-                            )}
-                            <span className="text-[9px] uppercase font-semibold text-emerald-700 bg-emerald-50 px-1 py-0.5 rounded">
-                              Price Visible
-                            </span>
-                          </div>
-                        ) : (
-                          <div>
-                            <span className="text-[10px] italic text-gold-700 font-semibold block">
-                              Price Hidden
-                            </span>
-                            <span className="text-[9px] text-charcoal-muted">
-                              {p.priceRequestText || 'On request'}
-                            </span>
-                          </div>
-                        )}
+                              {!priceDisplay.isRange && priceDisplay.mrp !== null && priceDisplay.mrp > priceDisplay.sellingPrice && (
+                                <div className="text-[10px] text-charcoal-subtle line-through">
+                                  {formatPrice(priceDisplay.mrp)}
+                                </div>
+                              )}
+                              <span className="text-[9px] uppercase font-semibold text-emerald-700 bg-emerald-50 px-1 py-0.5 rounded">
+                                Price Visible
+                              </span>
+                            </div>
+                          ) : (
+                            <div>
+                              <span className="text-[10px] italic text-gold-700 font-semibold block">
+                                Price Hidden
+                              </span>
+                              <span className="text-[9px] text-charcoal-muted">
+                                {priceDisplay.displayPriceText || 'On request'}
+                              </span>
+                            </div>
+                          );
+                        })()}
                       </td>
 
                       {/* Colours */}
