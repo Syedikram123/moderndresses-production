@@ -69,6 +69,7 @@ export const AdminProductEdit: React.FC = () => {
   // Dynamic Size Pricing & Tags
   const [sizePricing, setSizePricing] = useState<ProductSizePrice[]>([]);
   const [showDiscountBadge, setShowDiscountBadge] = useState<boolean>(true);
+  const [hideAllSizePrices, setHideAllSizePrices] = useState<boolean>(false);
   const [tags, setTags] = useState<string[]>([]);
 
   // Multi-Colour System (Requirements #18 & #50: Max 5 photos per colour)
@@ -112,7 +113,21 @@ export const AdminProductEdit: React.FC = () => {
           setCountryOfOrigin(prod.countryOfOrigin || 'India');
           setTags(prod.tags || []);
           setShowDiscountBadge(prod.showDiscountBadge !== false);
-          setSizePricing(getProductSizePricing(prod));
+          setHideAllSizePrices(Boolean(prod.hideAllSizePrices));
+          if (prod.sizePricing && Array.isArray(prod.sizePricing) && prod.sizePricing.length > 0) {
+            setSizePricing(
+              prod.sizePricing.map((sp) => ({
+                size: (sp.size || '').trim(),
+                mrp: Number(sp.mrp) || 0,
+                sellingPrice: Number(sp.sellingPrice) || 0,
+                showPrice: sp.showPrice !== false,
+                status: sp.status || 'AVAILABLE',
+                contactPriceMessage: (sp.contactPriceMessage || 'Price available on request').trim(),
+              }))
+            );
+          } else {
+            setSizePricing(getProductSizePricing(prod));
+          }
           setColours(
             prod.colours?.length
               ? prod.colours
@@ -167,6 +182,7 @@ export const AdminProductEdit: React.FC = () => {
       mrp: 0,
       sellingPrice: 0,
       showPrice: true,
+      status: 'AVAILABLE',
       contactPriceMessage: 'Price available on request',
     };
     setSizePricing((prev) => [...prev, newEntry]);
@@ -344,6 +360,7 @@ export const AdminProductEdit: React.FC = () => {
         mrp: Number(sp.mrp) || 0,
         sellingPrice: Number(sp.sellingPrice) || 0,
         showPrice: Boolean(sp.showPrice),
+        status: sp.status || 'AVAILABLE',
         contactPriceMessage: (sp.contactPriceMessage || 'Price available on request').trim(),
       }));
 
@@ -359,6 +376,7 @@ export const AdminProductEdit: React.FC = () => {
         shortDescription: shortDescription.trim(),
         sizePricing: cleanSizePricing,
         showDiscountBadge,
+        hideAllSizePrices,
         // Legacy fallback fields for backward compatibility
         mrp: firstVisible ? firstVisible.mrp : 0,
         sellingPrice: firstVisible ? firstVisible.sellingPrice : 0,
@@ -612,19 +630,35 @@ export const AdminProductEdit: React.FC = () => {
             </button>
           </div>
 
-          {/* Product-level Discount Badge Toggle */}
-          <div className="flex items-center gap-2.5 p-3.5 bg-stone-50 rounded-2xl border border-stone-200">
-            <input
-              type="checkbox"
-              id="showDiscountBadge"
-              checked={showDiscountBadge}
-              onChange={(e) => setShowDiscountBadge(e.target.checked)}
-              className="rounded text-charcoal focus:ring-charcoal w-4 h-4"
-            />
-            <label htmlFor="showDiscountBadge" className="text-xs font-semibold text-charcoal cursor-pointer">
-              Show discount percentage on store
-              
-            </label>
+          {/* Product-level Toggles */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* Product-level Discount Badge Toggle */}
+            <div className="flex items-center gap-2.5 p-3.5 bg-stone-50 rounded-2xl border border-stone-200">
+              <input
+                type="checkbox"
+                id="showDiscountBadge"
+                checked={showDiscountBadge}
+                onChange={(e) => setShowDiscountBadge(e.target.checked)}
+                className="rounded text-charcoal focus:ring-charcoal w-4 h-4"
+              />
+              <label htmlFor="showDiscountBadge" className="text-xs font-semibold text-charcoal cursor-pointer">
+                Show discount percentage on store
+              </label>
+            </div>
+
+            {/* Global Hide All Size Prices Toggle */}
+            <div className="flex items-center gap-2.5 p-3.5 bg-stone-50 rounded-2xl border border-stone-200">
+              <input
+                type="checkbox"
+                id="hideAllSizePrices"
+                checked={hideAllSizePrices}
+                onChange={(e) => setHideAllSizePrices(e.target.checked)}
+                className="rounded text-charcoal focus:ring-charcoal w-4 h-4"
+              />
+              <label htmlFor="hideAllSizePrices" className="text-xs font-semibold text-charcoal cursor-pointer">
+                Hide all size prices on store
+              </label>
+            </div>
           </div>
 
           {/* Size Pricing Rows */}
@@ -656,7 +690,7 @@ export const AdminProductEdit: React.FC = () => {
                     >
                       <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-start">
                         {/* Size Name */}
-                        <div className="sm:col-span-3">
+                        <div className="sm:col-span-2">
                           <label className="block text-[11px] font-bold uppercase tracking-wider text-charcoal mb-1">
                             Size *
                           </label>
@@ -665,7 +699,7 @@ export const AdminProductEdit: React.FC = () => {
                             required
                             value={item.size}
                             onChange={(e) => handleUpdateSize(index, 'size', e.target.value)}
-                            placeholder="e.g. S, M, XL, Free Size, 34"
+                            placeholder="e.g. S, M, XL, 34"
                             className="w-full text-xs font-medium bg-white border border-stone-200 rounded-xl px-3 py-2 text-charcoal focus:outline-none focus:ring-1 focus:ring-charcoal"
                           />
                         </div>
@@ -701,13 +735,13 @@ export const AdminProductEdit: React.FC = () => {
                         </div>
 
                         {/* Discount Display */}
-                        <div className="sm:col-span-2">
+                        <div className="sm:col-span-1">
                           <label className="block text-[11px] font-bold uppercase tracking-wider text-charcoal mb-1">
                             Discount
                           </label>
-                          <div className="w-full text-xs bg-stone-100 border border-stone-200 rounded-xl px-3 py-2 font-bold text-center">
+                          <div className="w-full text-xs bg-stone-100 border border-stone-200 rounded-xl px-2 py-2 font-bold text-center">
                             {item.showPrice && sizeDiscount > 0 ? (
-                              <span className="text-emerald-700">{sizeDiscount}% OFF</span>
+                              <span className="text-emerald-700">{sizeDiscount}%</span>
                             ) : (
                               <span className="text-stone-400">—</span>
                             )}
@@ -719,11 +753,11 @@ export const AdminProductEdit: React.FC = () => {
                           <label className="block text-[11px] font-bold uppercase tracking-wider text-charcoal mb-1">
                             Price Visibility
                           </label>
-                          <div className="flex items-center gap-1.5 pt-1">
+                          <div className="flex items-center gap-1 pt-0.5">
                             <button
                               type="button"
                               onClick={() => handleUpdateSize(index, 'showPrice', true)}
-                              className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all ${
+                              className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all text-center ${
                                 item.showPrice
                                   ? 'bg-emerald-600 text-white shadow-sm'
                                   : 'bg-white text-stone-600 border border-stone-200 hover:bg-stone-100'
@@ -734,7 +768,7 @@ export const AdminProductEdit: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => handleUpdateSize(index, 'showPrice', false)}
-                              className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all ${
+                              className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all text-center ${
                                 !item.showPrice
                                   ? 'bg-amber-600 text-white shadow-sm'
                                   : 'bg-white text-stone-600 border border-stone-200 hover:bg-stone-100'
@@ -743,6 +777,28 @@ export const AdminProductEdit: React.FC = () => {
                               Hide
                             </button>
                           </div>
+                        </div>
+
+                        {/* Size Status Control */}
+                        <div className="sm:col-span-2">
+                          <label className="block text-[11px] font-bold uppercase tracking-wider text-charcoal mb-1">
+                            Size Status
+                          </label>
+                          <select
+                            value={item.status || 'AVAILABLE'}
+                            onChange={(e) => handleUpdateSize(index, 'status', e.target.value as 'AVAILABLE' | 'OUT_OF_STOCK' | 'DRAFT')}
+                            className={`w-full text-xs font-semibold bg-white border rounded-xl px-2 py-2 focus:outline-none focus:ring-1 focus:ring-charcoal transition-colors ${
+                              item.status === 'OUT_OF_STOCK'
+                                ? 'text-rose-700 border-rose-300 bg-rose-50/50'
+                                : item.status === 'DRAFT'
+                                ? 'text-stone-500 border-stone-300 bg-stone-100'
+                                : 'text-emerald-700 border-stone-200'
+                            }`}
+                          >
+                            <option value="AVAILABLE">AVAILABLE</option>
+                            <option value="OUT_OF_STOCK">OUT OF STOCK</option>
+                            <option value="DRAFT">DRAFT</option>
+                          </select>
                         </div>
 
                         {/* Delete Row */}

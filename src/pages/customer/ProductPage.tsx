@@ -48,9 +48,11 @@ export const ProductPage: React.FC = () => {
   const isHidden = product?.status === 'HIDDEN';
   const isOutOfStock = product?.status === 'OUT_OF_STOCK';
 
-  // Dynamic Size Pricing resolution
+  // Dynamic Size Pricing resolution (excluding DRAFT sizes from customer view)
   const sizePricingList = useMemo(() => {
-    return product ? getProductSizePricing(product) : [];
+    if (!product) return [];
+    const fullList = getProductSizePricing(product);
+    return fullList.filter((sp) => sp.status !== 'DRAFT');
   }, [product]);
 
   // Current price display based on selected size
@@ -65,10 +67,20 @@ export const ProductPage: React.FC = () => {
     images: [],
   };
 
-  // Set default size once product is loaded
+  // Set default size once product is loaded (prefer first AVAILABLE size, fallback to first listed size)
   React.useEffect(() => {
-    if (sizePricingList.length > 0 && (!selectedSize || !sizePricingList.some((sp) => sp.size === selectedSize))) {
-      setSelectedSize(sizePricingList[0].size);
+    if (sizePricingList.length > 0) {
+      const isCurrentValid = selectedSize && sizePricingList.some((sp) => sp.size === selectedSize && sp.status === 'AVAILABLE');
+      if (!isCurrentValid) {
+        const firstAvailable = sizePricingList.find((sp) => sp.status === 'AVAILABLE');
+        if (firstAvailable) {
+          setSelectedSize(firstAvailable.size);
+        } else {
+          setSelectedSize(sizePricingList[0].size);
+        }
+      }
+    } else {
+      setSelectedSize('');
     }
   }, [sizePricingList, selectedSize]);
 
@@ -255,7 +267,7 @@ export const ProductPage: React.FC = () => {
                   {priceDisplay.displayPriceText || 'Price available on request'}
                 </div>
                 <p className="text-xs text-charcoal-muted">
-                  Connect directly with our store through WhatsApp for current pricing, discounts & availability.
+                  Connect directly with our store through WhatsApp for current pricing & availability.
                 </p>
               </div>
             )}
@@ -307,20 +319,43 @@ export const ProductPage: React.FC = () => {
                 </label>
               </div>
               <div className="flex flex-wrap gap-2">
-                {sizePricingList.map((sp) => (
-                  <button
-                    key={sp.size}
-                    type="button"
-                    onClick={() => setSelectedSize(sp.size)}
-                    className={`min-w-[48px] h-10 px-3.5 rounded-xl border text-xs font-semibold uppercase tracking-wider transition-all ${
-                      selectedSize === sp.size
-                        ? 'border-charcoal bg-charcoal text-white shadow-sm'
-                        : 'border-boutique-300 bg-white text-charcoal hover:border-charcoal'
-                    }`}
-                  >
-                    {sp.size}
-                  </button>
-                ))}
+                {sizePricingList.map((sp) => {
+                  const isOutOfStockSize = sp.status === 'OUT_OF_STOCK';
+                  const isSelected = selectedSize === sp.size && !isOutOfStockSize;
+
+                  return (
+                    <button
+                      key={sp.size}
+                      type="button"
+                      disabled={isOutOfStockSize}
+                      onClick={() => {
+                        if (!isOutOfStockSize) {
+                          setSelectedSize(sp.size);
+                        }
+                      }}
+                      title={isOutOfStockSize ? `${sp.size} (Out of Stock)` : sp.size}
+                      aria-disabled={isOutOfStockSize}
+                      className={`relative overflow-hidden min-w-[48px] h-10 px-3.5 rounded-xl border text-xs font-semibold uppercase tracking-wider transition-all flex items-center justify-center ${
+                        isOutOfStockSize
+                          ? 'bg-stone-100/80 text-stone-400 border-stone-200 cursor-not-allowed select-none'
+                          : isSelected
+                          ? 'border-charcoal bg-charcoal text-white shadow-sm'
+                          : 'border-boutique-300 bg-white text-charcoal hover:border-charcoal'
+                      }`}
+                    >
+                      <span className="relative z-10">{sp.size}</span>
+                      {isOutOfStockSize && (
+                        <svg
+                          className="absolute inset-0 w-full h-full pointer-events-none text-stone-400"
+                          preserveAspectRatio="none"
+                          viewBox="0 0 100 100"
+                        >
+                          <line x1="0" y1="0" x2="100" y2="100" strokeWidth="2" stroke="currentColor" />
+                        </svg>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}

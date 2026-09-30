@@ -32,11 +32,14 @@ export interface Subcategory {
   updatedAt: string;
 }
 
+export type ProductSizeStatus = 'AVAILABLE' | 'OUT_OF_STOCK' | 'DRAFT';
+
 export interface ProductSizePrice {
   size: string;
   mrp: number;
   sellingPrice: number;
   showPrice: boolean;
+  status?: ProductSizeStatus; // 'AVAILABLE' | 'OUT_OF_STOCK' | 'DRAFT', default 'AVAILABLE'
   contactPriceMessage?: string; // e.g. "Price available on request"
 }
 
@@ -52,6 +55,7 @@ export interface Product {
   // Size-Specific Pricing Architecture
   sizePricing?: ProductSizePrice[];
   showDiscountBadge?: boolean; // Default true (product-level discount badge toggle)
+  hideAllSizePrices?: boolean; // Default false (product-level toggle to hide all size prices on store)
 
   // Legacy Pricing (Maintained for backward compatibility)
   mrp?: number;

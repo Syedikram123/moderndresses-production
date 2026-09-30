@@ -69,7 +69,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, category, sub
           {/* Category / Brand Subtitle */}
           <div className="flex items-center justify-between text-[11px] text-charcoal-muted uppercase tracking-wider mb-1">
             <span>{category?.name || 'Modern Dresses'}</span>
-            <span className="font-mono text-[10px] text-charcoal-subtle">{product.id}</span>
+           {/* <span className="font-mono text-[10px] text-charcoal-subtle">{product.id}</span> */}
           </div>
 
           {/* Product Title */}

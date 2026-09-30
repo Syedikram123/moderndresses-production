@@ -40,7 +40,7 @@ export const SubcategoryPage: React.FC = () => {
     subcategoryProducts.forEach((p) => {
       const spList = getProductSizePricing(p);
       spList.forEach((sp) => {
-        if (sp.size.trim()) sizeSet.add(sp.size.trim());
+        if (sp.size.trim() && sp.status !== 'DRAFT') sizeSet.add(sp.size.trim());
       });
     });
     return Array.from(sizeSet).sort();
@@ -71,7 +71,9 @@ export const SubcategoryPage: React.FC = () => {
     // Size Filter
     if (filters.selectedSize) {
       list = list.filter((p) =>
-        getProductSizePricing(p).some((sp) => sp.size.toLowerCase() === filters.selectedSize.toLowerCase())
+        getProductSizePricing(p).some(
+          (sp) => sp.status !== 'DRAFT' && sp.size.toLowerCase() === filters.selectedSize.toLowerCase()
+        )
       );
     }
 

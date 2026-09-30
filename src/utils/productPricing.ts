@@ -1,4 +1,4 @@
-import { Product, ProductSizePrice } from '../types';
+import { Product, ProductSizePrice, ProductSizeStatus } from '../types';
 import { formatPrice, calculateDiscount } from './formatters';
 
 export const DEFAULT_CONTACT_PRICE_MESSAGE = 'Price available on request';
@@ -11,18 +11,21 @@ export const DEFAULT_CONTACT_PRICE_MESSAGE = 'Price available on request';
 export function getProductSizePricing(product?: Product | null): ProductSizePrice[] {
   if (!product) return [];
 
+  const globalHidePrices = Boolean(product.hideAllSizePrices);
+
   if (product.sizePricing && Array.isArray(product.sizePricing) && product.sizePricing.length > 0) {
     return product.sizePricing.map((sp) => ({
       size: (sp.size || '').trim(),
       mrp: Number(sp.mrp) || 0,
       sellingPrice: Number(sp.sellingPrice) || 0,
-      showPrice: sp.showPrice !== false,
+      showPrice: globalHidePrices ? false : sp.showPrice !== false,
+      status: (sp.status as ProductSizeStatus) || 'AVAILABLE',
       contactPriceMessage: (sp.contactPriceMessage || DEFAULT_CONTACT_PRICE_MESSAGE).trim(),
     }));
   }
 
   // Legacy fallback: Derive from legacy product fields
-  const legacyShowPrice = product.showPrice !== false;
+  const legacyShowPrice = globalHidePrices ? false : product.showPrice !== false;
   const legacyMrp = Number(product.mrp) || 0;
   const legacySellingPrice = Number(product.sellingPrice) || 0;
   const legacyMessage = product.priceRequestText || DEFAULT_CONTACT_PRICE_MESSAGE;
@@ -33,6 +36,7 @@ export function getProductSizePricing(product?: Product | null): ProductSizePric
       mrp: legacyMrp,
       sellingPrice: legacySellingPrice,
       showPrice: legacyShowPrice,
+      status: 'AVAILABLE' as ProductSizeStatus,
       contactPriceMessage: legacyMessage,
     }));
   }
@@ -44,6 +48,7 @@ export function getProductSizePricing(product?: Product | null): ProductSizePric
       mrp: legacyMrp,
       sellingPrice: legacySellingPrice,
       showPrice: legacyShowPrice,
+      status: 'AVAILABLE' as ProductSizeStatus,
       contactPriceMessage: legacyMessage,
     },
   ];
@@ -118,7 +123,9 @@ export function getProductPriceDisplay(product?: Product | null, selectedSize?: 
   }
 
   // Case 2: General product card / listing display (no size selected)
-  const visibleEntries = sizePricing.filter((sp) => sp.showPrice && sp.sellingPrice > 0);
+  // Exclude DRAFT sizes from general pricing calculations
+  const nonDraftEntries = sizePricing.filter((sp) => sp.status !== 'DRAFT');
+  const visibleEntries = nonDraftEntries.filter((sp) => sp.showPrice && sp.sellingPrice > 0);
 
   if (visibleEntries.length > 0) {
     const prices = visibleEntries.map((sp) => sp.sellingPrice);
@@ -143,7 +150,7 @@ export function getProductPriceDisplay(product?: Product | null, selectedSize?: 
   }
 
   // All sizes are hidden (or no visible pricing)
-  const firstMessage = sizePricing[0]?.contactPriceMessage || product.priceRequestText || DEFAULT_CONTACT_PRICE_MESSAGE;
+  const firstMessage = (nonDraftEntries[0] || sizePricing[0])?.contactPriceMessage || product.priceRequestText || DEFAULT_CONTACT_PRICE_MESSAGE;
   return {
     hasVisiblePrice: false,
     isRange: false,
@@ -152,7 +159,7 @@ export function getProductPriceDisplay(product?: Product | null, selectedSize?: 
     discount: 0,
     displayPriceText: firstMessage,
     contactPriceMessage: firstMessage,
-    matchedSizePricing: sizePricing[0] || null,
+    matchedSizePricing: nonDraftEntries[0] || sizePricing[0] || null,
   };
 }
 
